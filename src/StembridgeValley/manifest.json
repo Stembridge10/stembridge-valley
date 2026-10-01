@@ -1,0 +1,10 @@
+{
+  "Name": "Stembridge Valley",
+  "Author": "Stembridge",
+  "Version": "0.1.0",
+  "Description": "Shared-world rules and server connection for Stembridge Valley.",
+  "UniqueID": "Stembridge.StembridgeValley",
+  "EntryDll": "StembridgeValley.dll",
+  "MinimumApiVersion": "4.0.0",
+  "UpdateKeys": []
+}

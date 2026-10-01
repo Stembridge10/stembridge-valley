@@ -1,0 +1,18 @@
+{
+  "RealMinutesPerDay": 60,
+  "ClockRunsWhenEmpty": true,
+  "KeepEnergyOvernight": true,
+  "BedIsNap": true,
+  "SittingEnergyPerMinute": 60,
+  "IdleEnergyPerMinute": 6,
+  "RestedAfterMinutesAway": 20,
+  "NoPassOutPenalty": true,
+  "CropsSurviveSeasonChange": true,
+  "NoFriendshipDecay": true,
+  "Server": {
+    "FarmName": "Stembridge Valley",
+    "StartingCabins": 3,
+    "FarmType": 0,
+    "TryAutomaticPortForward": true
+  }
+}

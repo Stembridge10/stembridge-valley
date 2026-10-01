@@ -1,0 +1,35 @@
+using HarmonyLib;
+using StardewModdingAPI;
+
+namespace StembridgeValley;
+
+internal sealed class ModEntry : Mod
+{
+    public override void Entry(IModHelper helper)
+    {
+        Log.Monitor = Monitor;
+        SV.Load();
+        SV.Config = helper.ReadConfig<ModConfig>();
+        if (int.TryParse(Environment.GetEnvironmentVariable("SV_MINUTES_PER_DAY"), out int minutes) && minutes > 0)
+            SV.Config.RealMinutesPerDay = minutes;
+
+        if (SV.Role == Role.None)
+        {
+            Monitor.Log("Not started by the Stembridge Valley launcher; staying off.", LogLevel.Info);
+            return;
+        }
+
+        Monitor.Log($"Stembridge Valley {ModManifest.Version} as {SV.Role}, pack {SV.PackVersion}.", LogLevel.Info);
+        if (string.IsNullOrEmpty(SV.Password))
+            Monitor.Log("No server password set.", LogLevel.Warn);
+
+        var harmony = new Harmony(ModManifest.UniqueID);
+        Rules.Apply(helper, harmony);
+        Network.Apply(harmony);
+        if (SV.Role == Role.Server)
+            Server.Apply(helper, harmony);
+        else
+            Join.Apply(helper);
+        TestProbe.Apply(helper);
+    }
+}
