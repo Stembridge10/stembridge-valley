@@ -35,7 +35,7 @@ def main():
     assert pack["url"].endswith("/mods.zip") and len(pack["sha256"]) == 64
 
     run([DOTNET, "publish", "-c", "Release", "-o", str(out / "launcher")], cwd=REPO / "src/Launcher", stdout=subprocess.DEVNULL)
-    launcher = out / "Play Stembridge Valley.exe"
+    launcher = out / "Play-Stembridge-Valley.exe"  # GitHub turns spaces in asset names into dots
     shutil.move(str(out / "launcher" / "Play Stembridge Valley.exe"), launcher)
     shutil.rmtree(out / "launcher")
 
