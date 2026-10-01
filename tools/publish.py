@@ -50,14 +50,28 @@ def main():
         for name in ["Start Server.cmd", "Stop Server.cmd", "Server Status.cmd", "Allow Through Firewall.cmd"]:
             z.write(REPO / "server" / name, "StembridgeValley-Server/" + name)
 
+    # Linux ARM server (Oracle box): host tool + systemd unit + LZ4 shim source.
+    linux_build = out / "host-linux"
+    run([DOTNET, "build", "-c", "Release", "-r", "linux-arm64", "--self-contained", "false", "-o", str(linux_build)],
+        cwd=REPO / "src/Host", stdout=subprocess.DEVNULL)
+    linux_tar = out / "StembridgeValley-Server-linux-arm64.tar.gz"
+    import tarfile
+    with tarfile.open(linux_tar, "w:gz") as t:
+        for f in sorted(linux_build.iterdir()):
+            if f.is_file() and f.suffix in {".dll", ".json"}:
+                t.add(f, "host/" + f.name)
+        for f in sorted((REPO / "server/linux").iterdir()):
+            t.add(f, f.name)
+    shutil.rmtree(linux_build)
+
     sums = "\n".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}" for p in
-                     [out / "mods.zip", launcher, server_zip]) + "\n"
+                     [out / "mods.zip", launcher, server_zip, linux_tar]) + "\n"
     (out / "SHA256SUMS.txt").write_text(sums)
 
     if "--dry-run" in sys.argv:
         print("\nDry run: built", ", ".join(p.name for p in out.iterdir()))
         return
-    assets = [out / "mods.zip", out / "pack.json", launcher, server_zip, out / "SHA256SUMS.txt"]
+    assets = [out / "mods.zip", out / "pack.json", launcher, server_zip, linux_tar, out / "SHA256SUMS.txt"]
     run(["gh", "release", "create", version, *map(str, assets), "--repo", OWNER_REPO,
          "--title", f"Stembridge Valley {version}", "--notes", notes, "--latest"])
     print(f"\nPublished {version}. Players get it automatically next time they launch.")

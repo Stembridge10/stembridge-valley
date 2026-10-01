@@ -12,6 +12,9 @@ internal sealed class ModEntry : Mod
         SV.Config = helper.ReadConfig<ModConfig>();
         if (int.TryParse(Environment.GetEnvironmentVariable("SV_MINUTES_PER_DAY"), out int minutes) && minutes > 0)
             SV.Config.RealMinutesPerDay = minutes;
+        // Cloud servers have no home router to ask for an open port.
+        if (Environment.GetEnvironmentVariable("SV_NO_UPNP") == "1")
+            SV.Config.Server.TryAutomaticPortForward = false;
 
         if (SV.Role == Role.None)
         {

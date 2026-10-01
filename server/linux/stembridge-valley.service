@@ -1,0 +1,21 @@
+[Unit]
+Description=Stembridge Valley (Stardew Valley shared world server)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=stardew
+Group=stardew
+WorkingDirectory=/opt/stardew/host
+Environment=DOTNET_ROOT=/opt/stardew/dotnet
+Environment=HOME=/opt/stardew
+Environment=SV_NO_UPNP=1
+Environment=SDL_AUDIODRIVER=dummy
+ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1280x720x24" /opt/stardew/dotnet/dotnet /opt/stardew/host/SVHost.dll --instance /opt/stardew/server
+ExecStop=/bin/sh -c 'touch /opt/stardew/server/stop.flag; sleep 15'
+TimeoutStopSec=40
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

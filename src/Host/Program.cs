@@ -102,9 +102,13 @@ internal static class Program
 
             DateTime runStart = DateTime.UtcNow;
             Say($"Starting {settings.Role} (pack {version}).");
-            int code = PrivateDesktop.Run(Environment.ProcessPath!, $"--instance \"{Instance}\" --worker", AppContext.BaseDirectory, Instance,
-                shouldStop: () => File.Exists(Path.Combine(Instance, "stop.flag"))
-                    || (settings.MaxMinutes > 0 && DateTime.UtcNow - started > TimeSpan.FromMinutes(settings.MaxMinutes)));
+            Func<bool> stopNow = () => File.Exists(Path.Combine(Instance, "stop.flag"))
+                || (settings.MaxMinutes > 0 && DateTime.UtcNow - started > TimeSpan.FromMinutes(settings.MaxMinutes));
+            int code = OperatingSystem.IsWindows()
+                ? PrivateDesktop.Run(Environment.ProcessPath!, $"--instance \"{Instance}\" --worker", AppContext.BaseDirectory, Instance, stopNow)
+                : RunChild(Environment.ProcessPath!,
+                    (Path.GetFileNameWithoutExtension(Environment.ProcessPath!) == "dotnet" ? $"\"{typeof(Program).Assembly.Location}\" " : "")
+                    + $"--instance \"{Instance}\" --worker", AppContext.BaseDirectory, Instance, stopNow);
             Say($"Game stopped (code {code}).");
 
             if (File.Exists(Path.Combine(Instance, "stop.flag")))
@@ -133,6 +137,23 @@ internal static class Program
         }
     }
 
+    /// <summary>Linux: no desktop to hide from, so just run the worker as a child process.</summary>
+    private static int RunChild(string app, string arguments, string workingDir, string instance, Func<bool> shouldStop)
+    {
+        var info = new ProcessStartInfo(app, arguments) { WorkingDirectory = workingDir, UseShellExecute = false };
+        using var child = Process.Start(info)!;
+        while (!child.WaitForExit(1000))
+        {
+            if (shouldStop())
+            {
+                try { child.Kill(entireProcessTree: true); } catch { }
+                child.WaitForExit();
+                break;
+            }
+        }
+        return child.ExitCode;
+    }
+
     // ---------------- hidden game ----------------
 
     private static int RunGame(HostSettings settings)
@@ -147,8 +168,14 @@ internal static class Program
             }
             return null;
         };
+        if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
+        {
+            ArmPatch.Folder(Game, recursive: false);
+            ArmPatch.Folder(Path.Combine(Instance, "Mods"), recursive: true);
+        }
         Directory.SetCurrentDirectory(Game);
-        SetDllDirectory(Game);
+        if (OperatingSystem.IsWindows())
+            SetDllDirectory(Game);
         // The game and MonoGame look for Content next to the "app"; point them at the real game folder.
         AppDomain.CurrentDomain.SetData("APP_CONTEXT_BASE_DIRECTORY", Game + Path.DirectorySeparatorChar);
         if (!File.Exists(Path.Combine(AppContext.BaseDirectory, "Stardew Valley.dll")))
@@ -188,7 +215,8 @@ internal static class Program
 
         Assembly smapi = AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(Game, "StardewModdingAPI.dll"));
         NoPhysicalInput.Apply(harmony);
-        AllocConsole();
+        if (OperatingSystem.IsWindows())
+            AllocConsole();
         Console.WriteLine($"Hidden {settings.Role} ready. Saves: {saves}");
         smapi.EntryPoint!.Invoke(null, new object[] { new[] { "--no-terminal", "--mods-path", Path.Combine(Instance, "Mods") } });
         return 0;
