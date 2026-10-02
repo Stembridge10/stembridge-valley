@@ -1,6 +1,7 @@
 # Stembridge Valley: game design plan
 
 Owner decisions (Oct 2026). Stardew farming stays the core; MMO loops sit on top.
+Status: progression drafted; calendar, marriage and festival decisions made Oct 2 (below).
 
 ## World
 - One shared world: one town, one clock, one set of seasons. ~60 real minutes per in-game day.
@@ -11,17 +12,98 @@ Owner decisions (Oct 2026). Stardew farming stays the core; MMO loops sit on top
 
 ## Build order
 1. **4-player farms** (above).
-2. **Projects**
-   - Farm projects: per-farm bundles that unlock expansions, buildings, greenhouse, upgrades.
-   - Town projects: server-wide Community Center; every farm contributes; big unlocks for everyone; contribution board.
-3. **Weekly town contracts**: server-wide orders with rewards and a farm ranking.
+2. **Projects**: farm projects (per farm) and town projects (server-wide Community Center).
+3. **Contracts**: daily and weekly server-wide orders with a farm ranking.
 4. **Market**: player trading; prices fall as supply rises, so farms specialize.
-5. **Co-op dungeon runs**: group Skull Cavern trips, weekly boss, shared loot, mine-depth board.
+5. **Co-op dungeons**: group Skull Cavern runs, weekly boss, shared loot, depth board.
 
 ## Villagers
 - Friendship is replaced by **town reputation**, earned from projects and contracts. No gift grind.
-- Everything friendship used to unlock (recipes, Robin discounts, Wizard buildings, etc.) is gated on reputation instead.
-- Villagers stay as shopkeepers and quest givers.
+- Vanilla friendship mainly gives villager recipes, mailed gifts, heart events and marriage.
+  (Robin discounts and Wizard buildings are NOT friendship unlocks in vanilla; corrected from the earlier note.)
+- Reputation unlocks those recipes plus market access and better contract tiers. Villagers stay as shopkeepers and quest givers.
+- **Decided:** players can marry each other; villager marriage is off (one Abigail can't marry 20 players).
+
+## The key fact behind progression: the calendar runs fast
+One in-game day is ~1 real hour, so the calendar moves ~24 days per real day: a season every ~28 real hours,
+a full year in under 5 real days. Nobody plays 24 hours a day, so:
+- **Progression is paced in real days/weeks, not seasons.** Unlock gates use project items, levels and reputation, never dates.
+- **Sprinklers are the first big goal.** Crops only grow on days they're watered, so automation is what lets a farm grow while you sleep.
+- **Decided: keep 1-hour days** (owner asked for the recommendation). Reason: a 2-3 hour session still spans 2-3 in-game
+  days, so crops visibly grow while you play. Slower days (2-3 h) were rejected before for exactly that. Pausing when
+  empty doesn't work once several farms in different time zones share one clock.
+- **Decided: festivals happen on their normal in-game day**, not on a fixed real-time schedule. Tradeoff: they land at
+  whatever real hour that day falls on, so many players will miss a given one. Two festivals per season means one
+  roughly every 14 real hours.
+- Technical: vanilla blocks new players from joining during a festival or wedding (GameServer.isGameAvailable).
+  The server must not lock joins for that long, and the hidden host has to handle festival start/end on its own.
+
+## Example: four friends join (Maya, Jake, Sam, Lee)
+Server has run a few weeks. Three farms exist; it's Fall, Year 3. The Pantry town project is already done.
+
+**Day 1, first 10 minutes**
+- Join the Discord, get a fresh farm's invite code. Download the launcher, paste the code.
+- Launcher installs the mods, opens Stardew, connects. Make a character, wake up in one of 4 cabins on "Cedar Farm".
+- Mailbox: starter tools and **in-season** starter seeds (vanilla gives parsnips even in fall; fix this).
+- Town board shows: the farm's first project, today's contracts, current town project.
+
+**Day 1 evening (2-3 hours, roughly 3 in-game days)**
+- Clear land, plant, fish, mines floors 1-10, ship produce: ordinary early Stardew.
+- Farm project **Break Ground** (wood, stone, fiber) about half done.
+- Daily contracts give first gold and reputation (rank: Newcomer).
+- They walk over to an older farm and see what a finished farm looks like.
+
+**Days 2-4**
+- Farming 2 gives basic sprinklers. The group pools copper so crops grow overnight.
+- Break Ground done: Robin can now build a Coop and Barn on Cedar Farm.
+- Mines reach about floor 40 (iron). Roles appear: Maya farms, Jake mines, Sam fishes, Lee runs animals.
+- Rank: Local. Market opens to them; Jake sells spare iron to other farms.
+
+**Week 2**
+- Level 5 professions: each player effectively picks a class.
+- Farm project **Greenhouse** (available because the server finished the Pantry). They complete it.
+- Weekly contract (e.g. "Harvest Drive: 5,000 pumpkins for the town"); Cedar places 3rd of 4 farms.
+- They chip into the current town project, the **Vault**, and appear on the contribution board.
+
+**Weeks 3-4**
+- Jake reaches mine floor 120: Skull Key.
+- Server finishes the Vault: bus to the Desert is repaired for everyone.
+- Friday night: group Skull Cavern run. Lee's Deluxe Barn auto-feeds the animals.
+- Rank: Valued. Villager recipes arrive in the mail.
+
+**Month 2 and beyond**
+- Level 10 professions, iridium tools, quality sprinklers everywhere, wine and ancient fruit economy.
+- Town project chain continues: Willy's boat, then Ginger Island as the server's endgame zone.
+- Weekly boss, mine-depth board, monthly leaderboard reset with a new town project chain.
+- New farms arrive. Town unlocks already apply to them, so they catch up faster; veterans sell them gear on the market.
+
+## Farm projects (per farm, the 4 players share them)
+1. Break Ground: wood/stone/fiber. Unlocks Coop and Barn at Robin.
+2. First Fields: a few different crops. Opens more farm land (if the farm map supports staged expansion).
+3. Livestock: eggs, milk, wool. Unlocks bigger animal buildings.
+4. Greenhouse: needs the town Pantry first. Restores this farm's greenhouse.
+5. Workshop: bars and machines. Unlocks fish ponds, sheds, and the like.
+6. Wizard's Favor: late-game items. Farm obelisks and Gold Clock.
+
+## Town projects (server-wide Community Center, amounts scaled to the server)
+Same vanilla rooms and rewards, sized for every farm contributing:
+- Crafts Room: quarry bridge.  - Pantry: greenhouses become a farm project for every farm.
+- Fish Tank: glittering boulder.  - Boiler Room: minecarts.
+- Bulletin Board: reputation boost for everyone.  - Vault: bus to the Desert (Skull Cavern).
+- Then Willy's boat and Ginger Island.
+
+## Contracts
+- Daily: small, soloable. Gold plus reputation.
+- Weekly: big server orders; farms ranked; top farms get rare seeds or items.
+
+## What stays vanilla
+Farming, skills, professions, tools, mines, fishing, crafting, cooking, shops, animals, Skull Cavern.
+
+## Rule changes this design needs
+- Regrowing crops (blueberries, cranberries, corn, etc.): survive until first harvest, then die at the next season
+  change. The current "crops survive" rule lets them produce forever.
+- Starter seeds match the current season.
+- No animal mood or neglect penalty while all 4 of a farm's players are offline. Crops still need sprinklers or rain.
 
 ## Anti-cheat rule for every loop
 Anything shared or competitive (rankings, market, contracts, town projects) is scored and stored by the server, never trusted from a player's game. Server keeps an audit log of contributions and trades.
