@@ -26,6 +26,7 @@ internal static class Server
     public static void Apply(IModHelper helper, Harmony harmony)
     {
         Helper = helper;
+        SetPlayerLimit();
         helper.Events.GameLoop.UpdateTicked += OnUpdate;
         helper.Events.GameLoop.SaveLoaded += OnSaveLoaded;
         helper.Events.GameLoop.DayStarted += OnDayStarted;
@@ -40,6 +41,15 @@ internal static class Server
         // Ask the router to open the port (UPnP) when the game's LAN server starts.
         harmony.Patch(AccessTools.Method(typeof(Lidgren.Network.NetPeer), nameof(Lidgren.Network.NetPeer.Start)),
             prefix: new HarmonyMethod(typeof(Server), nameof(NetStart_Prefix)));
+    }
+
+    /// <summary>Vanilla allows 8 players per farm. The limit is just a number; the network layer sizes itself from it.</summary>
+    private static void SetPlayerLimit()
+    {
+        int limit = Math.Clamp(SV.Config.Server.MaxPlayers, 2, 64);
+        Game1.Multiplayer.playerLimit = limit;
+        if (Game1.netWorldState?.Value != null)
+            Game1.netWorldState.Value.CurrentPlayerLimit = limit;
     }
 
     private static void NetStart_Prefix(Lidgren.Network.NetPeer __instance)
@@ -76,11 +86,15 @@ internal static class Server
             SV.WriteFlag("server-status.txt", $"{status}\nplayers={online}\nclock={clock}\nupdated={DateTime.Now:yyyy-MM-dd HH:mm:ss}\n");
         }
 
+        if (status == "running" && e.IsMultipleOf(300) && Context.IsWorldReady)
+            EnsureFreeCabin();
+
         if (stage == 0 && Game1.activeClickableMenu is TitleMenu && Game1.gameMode == 0 && !SaveGame.IsProcessing)
         {
             if (++waitTicks < 30)
                 return;
             stage = 1;
+            SetPlayerLimit();
             var data = Helper.Data.ReadGlobalData<ServerSaveData>(SaveKey);
             if (data?.SaveName is { Length: > 0 } name && Directory.Exists(Path.Combine(Constants.SavesPath, name)))
                 LoadFarm(name);
@@ -142,6 +156,7 @@ internal static class Server
         Game1.options.pauseWhenOutOfFocus = false;
         Game1.player.ignoreCollisions = true;
         Game1.netWorldState.Value.IsPaused = false;
+        SetPlayerLimit();
         Helper.Data.WriteGlobalData(SaveKey, new ServerSaveData { SaveName = Constants.SaveFolderName });
         status = "running";
         Log.Info($"Farm is up: {Game1.player.farmName.Value}. Players join at this PC's address, port 24642.");
@@ -156,39 +171,106 @@ internal static class Server
         Log.Info($"New day: {Game1.season} {Game1.dayOfMonth}, year {Game1.year}.");
     }
 
-    /// <summary>Keep one unclaimed cabin (a blank farmhand nobody has customized yet) so a new friend can always join.</summary>
-    private static void EnsureFreeCabin()
+    /// <summary>
+    /// Keep one unclaimed cabin (a blank farmhand nobody has customized yet) so a new player can always join,
+    /// up to the player limit. Runs every few seconds, so the next cabin appears as soon as the last free one is taken.
+    /// </summary>
+    internal static void EnsureFreeCabin()
+    {
+        // Keep two free so two people joining at the same moment don't both grab the last one.
+        for (int built = 0; built < 2; built++)
+            if (!BuildCabinIfNeeded(wantFree: 2))
+                return;
+    }
+
+    private static bool BuildCabinIfNeeded(int wantFree)
     {
         Farm farm = Game1.getFarm();
         var cabins = farm.buildings.Where(b => b.isCabin).ToList();
-        bool hasFree = cabins.Any(b => b.GetIndoors() is Cabin c && (!c.HasOwner || !c.owner.isCustomized.Value));
-        if (hasFree || cabins.Count >= 7)
-            return;
+        int free = cabins.Count(b => b.GetIndoors() is Cabin c && (!c.HasOwner || !c.owner.isCustomized.Value));
+        if (free >= wantFree || cabins.Count >= Game1.Multiplayer.playerLimit - 1)
+            return false;
 
         foreach (var tile in CabinSpots(farm))
         {
+            if (!SpotIsClear(farm, tile))
+                continue;
+            ClearSpot(farm, tile);
             var cabin = new Building("Cabin", tile);
             cabin.skinId.Value = "Log Cabin";
             cabin.magical.Value = true;
             cabin.daysOfConstructionLeft.Value = 0;
             cabin.load();
-            if (farm.buildStructure(cabin, tile, Game1.player, skipSafetyChecks: false))
+            // Our own placement check above; the game's check reads the host's current map, which on a server isn't the farm.
+            if (farm.buildStructure(cabin, tile, Game1.player, skipSafetyChecks: true))
             {
-                Log.Info($"Built a new cabin at {tile.X},{tile.Y} for the next player.");
-                return;
+                Log.Info($"Built cabin #{cabins.Count + 1} at {tile.X},{tile.Y} for the next player.");
+                return true;
             }
         }
         Log.Warn("No room found for another cabin.");
+        return false;
     }
 
+    private const int CabinW = 5, CabinH = 3;
+
+    /// <summary>
+    /// Footprint plus a one-tile margin (two in front of the door) must be farm ground with nothing anyone made on it.
+    /// Wild debris (weeds, stones, twigs, wild trees, stumps, boulders, bushes) is fine: it gets cleared.
+    /// Crops, fruit trees, chests, machines, paths and other buildings are never touched.
+    /// </summary>
+    private static bool SpotIsClear(Farm farm, Vector2 tile)
+    {
+        for (int x = (int)tile.X - 1; x <= tile.X + CabinW; x++)
+            for (int y = (int)tile.Y - 1; y <= tile.Y + CabinH + 1; y++)
+            {
+                var v = new Vector2(x, y);
+                if (!farm.isTileOnMap(v) || farm.getBuildingAt(v) != null)
+                    return false;
+                if (farm.doesTileHaveProperty(x, y, "Diggable", "Back") == null)
+                    return false;
+                if (farm.doesTileHavePropertyNoNull(x, y, "Buildable", "Back").Equals("f", StringComparison.OrdinalIgnoreCase))
+                    return false;
+                if (farm.isWaterTile(x, y) || farm.map.GetLayer("Buildings")?.Tiles[x, y] != null)
+                    return false; // cliffs, fences on the map itself
+                if (farm.terrainFeatures.TryGetValue(v, out var tf) && !IsWild(tf))
+                    return false;
+                if (farm.objects.TryGetValue(v, out var obj) && !(obj.IsWeeds() || obj.IsBreakableStone() || obj.IsTwig()))
+                    return false;
+            }
+        return true;
+    }
+
+    private static bool IsWild(StardewValley.TerrainFeatures.TerrainFeature tf) => tf switch
+    {
+        StardewValley.TerrainFeatures.Grass => true,
+        StardewValley.TerrainFeatures.HoeDirt d => d.crop == null,
+        StardewValley.TerrainFeatures.Tree => true, // wild trees; planted fruit trees are FruitTree
+        _ => false,
+    };
+
+    private static void ClearSpot(Farm farm, Vector2 tile)
+    {
+        var area = new Rectangle((int)tile.X - 1, (int)tile.Y - 1, CabinW + 2, CabinH + 3);
+        for (int x = area.Left; x < area.Right; x++)
+            for (int y = area.Top; y < area.Bottom; y++)
+            {
+                var v = new Vector2(x, y);
+                farm.objects.Remove(v);
+                farm.terrainFeatures.Remove(v);
+            }
+        var pixels = new Rectangle(area.X * 64, area.Y * 64, area.Width * 64, area.Height * 64);
+        farm.resourceClumps.RemoveWhere(r => r.getBoundingBox().Intersects(pixels));
+        farm.largeTerrainFeatures.RemoveWhere(l => l.getBoundingBox().Intersects(pixels));
+    }
+
+    /// <summary>Every farm tile, nearest to the farmhouse first, so cabins pack into whatever room is left.</summary>
     private static IEnumerable<Vector2> CabinSpots(Farm farm)
     {
         Point house = farm.GetMainFarmHouseEntry();
-        for (int ring = 1; ring < 8; ring++)
-            for (int dx = -ring; dx <= ring; dx++)
-                for (int dy = -ring; dy <= ring; dy++)
-                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) == ring)
-                        yield return new Vector2(house.X + dx * 6, house.Y + dy * 5);
+        int w = farm.map.Layers[0].LayerWidth, h = farm.map.Layers[0].LayerHeight;
+        return Enumerable.Range(1, w - CabinW - 2).SelectMany(x => Enumerable.Range(1, h - CabinH - 3).Select(y => new Vector2(x, y)))
+            .OrderBy(v => Math.Abs(v.X - house.X) + Math.Abs(v.Y - house.Y));
     }
 
     private static void TryPortForward()

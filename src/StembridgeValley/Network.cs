@@ -130,6 +130,8 @@ internal static class Network
 
     private static void SendAvailable_Prefix(ref string userId, string connectionId)
     {
+        // Someone is about to see the cabin list: make sure there's a free one right now, not in a few seconds.
+        try { Server.EnsureFreeCabin(); } catch (Exception ex) { Log.Debug($"Cabin check failed: {ex.Message}"); }
         if (KeyByConnection.TryGetValue(connectionId, out string? key))
             userId = key;
     }

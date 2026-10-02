@@ -37,7 +37,8 @@ internal static class Join
         IClickableMenu? sub = TitleMenu.subMenu;
         bool idle = sub == null;
         bool disconnectedDialog = sub is ConfirmationDialog && current != null;
-        bool failedMenu = sub is FarmhandMenu fm && fm == current && fm.client != null && fm.client.timedOut && !fm.approvingFarmhand;
+        bool failedMenu = sub is FarmhandMenu fm && fm == current && fm.client != null && !fm.approvingFarmhand
+            && (fm.client.timedOut || fm.client.availableFarmhands is { Count: 0 }); // no free cabin yet: ask again shortly
 
         if (!idle && !disconnectedDialog && !failedMenu)
         {
@@ -69,13 +70,31 @@ internal static class Join
 
     /// <summary>Automated tests only: pick (or create) a farmhand without a person clicking.</summary>
     private static bool picked;
+    private static DateTime pickedAt;
     private static void TestAutoPick(object? sender, UpdateTickedEventArgs e)
     {
+        // Two new players can race for the same empty cabin; the loser is turned back. Start over after a while.
+        if (picked && !Context.IsWorldReady && DateTime.UtcNow - pickedAt > TimeSpan.FromSeconds(40))
+        {
+            Log.Info("[test] Join didn't finish; trying again.");
+            picked = false;
+            current = null;
+            Game1.gameMode = 0;
+            if (Game1.activeClickableMenu is not TitleMenu)
+                Game1.activeClickableMenu = new TitleMenu();
+            TitleMenu.subMenu = null;
+            return;
+        }
         if (picked || TitleMenu.subMenu is not FarmhandMenu menu || menu.client?.availableFarmhands is not { Count: > 0 } list)
             return;
         string name = Environment.GetEnvironmentVariable("SV_TEST_CHARACTER")!;
-        Farmer farmer = list.FirstOrDefault(f => f.isCustomized.Value && f.Name == name) ?? list.First(f => !f.isCustomized.Value);
+        var blanks = list.Where(f => !f.isCustomized.Value).ToList();
+        Farmer? farmer = list.FirstOrDefault(f => f.isCustomized.Value && f.Name == name)
+            ?? (blanks.Count > 0 ? blanks[Random.Shared.Next(blanks.Count)] : null);
+        if (farmer == null)
+            return;
         picked = true;
+        pickedAt = DateTime.UtcNow;
         Game1.game1.loadForNewGame();
         AccessTools.Property(typeof(Game1), nameof(Game1.player)).SetValue(null, farmer);
         if (!farmer.isCustomized.Value)

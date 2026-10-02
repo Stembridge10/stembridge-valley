@@ -173,6 +173,16 @@ internal static class Program
             ArmPatch.Folder(Game, recursive: false);
             ArmPatch.Folder(Path.Combine(Instance, "Mods"), recursive: true);
         }
+        // No keyboard on the server: SMAPI's console reader spins at 100% CPU when stdin is empty.
+        // Linux only: there the game folder is the server's own copy. On Windows it's the owner's real install.
+        if (!OperatingSystem.IsWindows())
+        try
+        {
+            string userCfg = Path.Combine(Game, "smapi-internal", "config.user.json");
+            if (!File.Exists(userCfg) || !File.ReadAllText(userCfg).Contains("ListenForConsoleInput"))
+                File.WriteAllText(userCfg, "{\n  \"ListenForConsoleInput\": false,\n  \"CheckForUpdates\": false\n}\n");
+        }
+        catch (Exception ex) { Console.WriteLine($"Couldn't write SMAPI user config: {ex.Message}"); }
         Directory.SetCurrentDirectory(Game);
         if (OperatingSystem.IsWindows())
             SetDllDirectory(Game);

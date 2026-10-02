@@ -12,6 +12,8 @@ internal sealed class ModEntry : Mod
         SV.Config = helper.ReadConfig<ModConfig>();
         if (int.TryParse(Environment.GetEnvironmentVariable("SV_MINUTES_PER_DAY"), out int minutes) && minutes > 0)
             SV.Config.RealMinutesPerDay = minutes;
+        if (int.TryParse(Environment.GetEnvironmentVariable("SV_MAX_PLAYERS"), out int maxPlayers) && maxPlayers > 1)
+            SV.Config.Server.MaxPlayers = maxPlayers;
         // Cloud servers have no home router to ask for an open port.
         if (Environment.GetEnvironmentVariable("SV_NO_UPNP") == "1")
             SV.Config.Server.TryAutomaticPortForward = false;
@@ -30,9 +32,15 @@ internal sealed class ModEntry : Mod
         Rules.Apply(helper, harmony);
         Network.Apply(harmony);
         if (SV.Role == Role.Server)
+        {
             Server.Apply(helper, harmony);
+            Perf.Apply(helper);
+        }
         else
+        {
             Join.Apply(helper);
+            Bot.Apply(helper, harmony);
+        }
         TestProbe.Apply(helper);
     }
 }
