@@ -45,11 +45,13 @@ a full year in under 5 real days. Nobody plays 24 hours a day, so:
 - Cost: the overnight save freeze happens every 14 minutes (~10 s seen at 20 players). Work on shortening it.
 - Festivals happen on their normal day, about every 3 real hours.
 
-## Crop items (all three, decided Oct 2)
-1. Grow Tonic: pushes a crop one growth stage. Earned from contracts and dungeons, tradeable.
-2. Blight / storms: occasionally wilt some crops (wilted = stops growing); Healing Tonic cures them.
-3. Revive Tonic: brings back a regrowing crop that ended at the season change.
-Tune blight so it adds market demand without feeling like punishment for being offline.
+## Crop items (decided Oct 2, revised)
+- Revive Tonic only: brings back a regrowing crop that ended at the season change. Earned from contracts/dungeons, tradeable.
+- Dropped by owner: Grow Tonic and blight/storms.
+
+## Ideas log (fun at 1 player or 20)
+Every loop must work solo and scale with more people. Candidates, not yet approved:
+- (add as found)
 
 ## Example: four friends join (Maya, Jake, Sam, Lee)
 Server has run a few weeks. Three farms exist; it's Fall, Year 3. The Pantry town project is already done.
