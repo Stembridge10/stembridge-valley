@@ -4,7 +4,7 @@ Owner decisions (Oct 2026). Stardew farming stays the core; MMO loops sit on top
 Status: progression drafted; calendar, marriage and festival decisions made Oct 2 (below).
 
 ## World
-- One shared world: one town, one clock, one set of seasons. ~60 real minutes per in-game day.
+- One shared world: one town, one clock, one set of seasons. **~14 real minutes per in-game day** (normal Stardew speed; decided Oct 2).
 - Several farms, **4 players each**. No main farmhouse (the hidden server's house is removed); each farm has only the 4 player cabins.
 - Farms connect to town by paths, so anyone can walk over and visit. Only a farm's own 4 players can harvest, open chests, or build there.
 - Each farm has its own invite code so friend groups land together; solo joiners go to any farm with a free spot.
@@ -24,7 +24,7 @@ Status: progression drafted; calendar, marriage and festival decisions made Oct 
 - Reputation unlocks those recipes plus market access and better contract tiers. Villagers stay as shopkeepers and quest givers.
 - **Decided:** players can marry each other; villager marriage is off (one Abigail can't marry 20 players).
 
-## The key fact behind progression: the calendar runs fast
+## The key fact behind progression: the calendar runs fast (superseded in part, see Day length below)
 One in-game day is ~1 real hour, so the calendar moves ~24 days per real day: a season every ~28 real hours,
 a full year in under 5 real days. Nobody plays 24 hours a day, so:
 - **Progression is paced in real days/weeks, not seasons.** Unlock gates use project items, levels and reputation, never dates.
@@ -37,6 +37,19 @@ a full year in under 5 real days. Nobody plays 24 hours a day, so:
   roughly every 14 real hours.
 - Technical: vanilla blocks new players from joining during a festival or wedding (GameServer.isGameAvailable).
   The server must not lock joins for that long, and the hidden host has to handle festival start/end on its own.
+
+## Day length (decided Oct 2, replaces the 1-hour decision)
+- Normal Stardew speed, ~14 real minutes per day. A season is ~6.5 real hours, a year ~26 real hours.
+- Crops only grow on days they were watered (vanilla) and never die at season change, so an unwatered farm simply waits.
+  Sprinklers keep growing while you're away, but ripe crops and finished machines wait for pickup, which caps offline gains.
+- Cost: the overnight save freeze happens every 14 minutes (~10 s seen at 20 players). Work on shortening it.
+- Festivals happen on their normal day, about every 3 real hours.
+
+## Crop items (all three, decided Oct 2)
+1. Grow Tonic: pushes a crop one growth stage. Earned from contracts and dungeons, tradeable.
+2. Blight / storms: occasionally wilt some crops (wilted = stops growing); Healing Tonic cures them.
+3. Revive Tonic: brings back a regrowing crop that ended at the season change.
+Tune blight so it adds market demand without feeling like punishment for being offline.
 
 ## Example: four friends join (Maya, Jake, Sam, Lee)
 Server has run a few weeks. Three farms exist; it's Fall, Year 3. The Pantry town project is already done.

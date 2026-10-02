@@ -1,5 +1,5 @@
 {
-  "RealMinutesPerDay": 60,
+  "RealMinutesPerDay": 14,
   "ClockRunsWhenEmpty": true,
   "KeepEnergyOvernight": true,
   "BedIsNap": true,
