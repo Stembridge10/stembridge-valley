@@ -20,6 +20,25 @@ internal static class FarmRoster
 
     private static string FilePath => Path.Combine(SV.StateDir, "farms.json");
 
+    /// <summary>How many farms were open last time (read before the world loads, so they all get created).</summary>
+    public static int SavedFarmCount()
+    {
+        try
+        {
+            if (File.Exists(FilePath))
+                return JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(FilePath))?.Count ?? 0;
+        }
+        catch { }
+        return 0;
+    }
+
+    /// <summary>Always keep one farm nobody has moved onto yet, so a group can start fresh.</summary>
+    public static void KeepOneEmptyFarm()
+    {
+        if (Farms.AllNames.All(f => Farms.MembersOf(f).Count > 0))
+            Farms.OpenFarm();
+    }
+
     public static void Load()
     {
         try
@@ -99,7 +118,8 @@ internal static class FarmRoster
             return invitedFarm;
         var candidates = Farms.AllNames.Where(f => FreeSlots(f) > 0).ToList();
         return candidates.Where(f => Farms.MembersOf(f).Count > 0).OrderByDescending(f => Farms.MembersOf(f).Count).FirstOrDefault()
-            ?? candidates.FirstOrDefault();
+            ?? candidates.FirstOrDefault()
+            ?? Farms.OpenFarm(); // every farm is full: open another
     }
 
     public static int FreeSlots(string farmName) => Game1.getLocationFromName(farmName) is { } farm

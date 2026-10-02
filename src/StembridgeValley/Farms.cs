@@ -6,6 +6,7 @@ using StardewValley;
 using StardewValley.Buildings;
 using StardewValley.GameData.Locations;
 using StardewValley.Locations;
+using StardewValley.Network;
 using StardewValley.Tools;
 using xTile.Dimensions;
 
@@ -23,14 +24,23 @@ internal static class Farms
 {
     public const string Prefix = "SV_Farm";
     public const int PlayersPerFarm = 4;
-    private static readonly string[] Names = { "Cedar", "Maple", "Willow", "Birch", "Aspen", "Pine", "Oak", "Elm", "Rowan", "Hazel", "Juniper", "Alder" };
+    private static readonly string[] Names = { "Cedar", "Maple", "Willow", "Birch", "Aspen", "Pine", "Oak", "Elm", "Rowan", "Hazel",
+        "Juniper", "Alder", "Cypress", "Laurel", "Poplar", "Spruce", "Linden", "Sumac", "Holly", "Larch" };
+    /// <summary>Most farms the world can grow to (80 players).</summary>
+    public static int MaxFarms => Names.Length;
+    private static IModHelper Helper = null!;
+    /// <summary>Server: how many farms are open. Grows as farms fill up; saved through farms.json.</summary>
+    private static int serverOpen;
 
     /// <summary>Where you arrive on a farm from the bus stop road (same as vanilla).</summary>
     public static readonly Point RoadEntry = new(79, 17);
 
-    public static int Count => Math.Clamp(SV.Config.Server.FarmCount, 1, Names.Length);
     public static bool Enabled => SV.Config.Server.FarmCount > 0;
-    public static IEnumerable<string> AllNames => Enumerable.Range(1, Count).Select(LocationName);
+    /// <summary>Open farms. The server decides; players see the farms the server has sent them.</summary>
+    public static IEnumerable<string> AllNames => SV.Role == Role.Server
+        ? Enumerable.Range(1, serverOpen).Select(LocationName)
+        : Game1.locations.Where(l => IsFarm(l) && l.isAlwaysActive.Value).Select(l => l.Name).ToList();
+    public static int Count => AllNames.Count();
     public static string LocationName(int i) => Prefix + i;
     public static string DisplayName(string locationName) =>
         int.TryParse(locationName.AsSpan(Prefix.Length), out int i) && i >= 1 && i <= Names.Length ? Names[i - 1] + " Farm" : locationName;
@@ -42,6 +52,9 @@ internal static class Farms
     {
         if (!Enabled)
             return;
+        Helper = helper;
+        if (SV.Role == Role.Server)
+            serverOpen = Math.Clamp(Math.Max(SV.Config.Server.FarmCount, FarmRoster.SavedFarmCount()), 1, MaxFarms);
         helper.Events.Content.AssetRequested += OnAssetRequested;
         GameLocation.RegisterTileAction("SV_Visit", (loc, args, who, tile) => { ShowVisitMenu(); return true; });
 
@@ -79,13 +92,20 @@ internal static class Farms
                 var data = asset.AsDictionary<string, LocationData>().Data;
                 data.TryGetValue("Farm_Standard", out LocationData? standard);
                 var clone = AccessTools.Method(typeof(object), "MemberwiseClone");
-                foreach (string name in AllNames)
+                // The server creates the farms that are open. Players get a cheap stand-in for every possible farm,
+                // which the real farm from the server replaces when it arrives (also for farms opened later).
+                bool server = SV.Role == Role.Server;
+                int n = server ? serverOpen : MaxFarms;
+                for (int i = 1; i <= n; i++)
                 {
+                    string name = LocationName(i);
                     // Same fish, forage and artifact spots as the normal farm.
                     var entry = standard != null ? (LocationData)clone.Invoke(standard, null)! : new LocationData();
                     entry.DisplayName = DisplayName(name);
                     entry.DefaultArrivalTile = RoadEntry;
-                    entry.CreateOnLoad = new CreateLocationData { MapPath = "Maps\\Farm", Type = "StardewValley.Farm", AlwaysActive = true };
+                    entry.CreateOnLoad = server
+                        ? new CreateLocationData { MapPath = "Maps\\Farm", Type = "StardewValley.Farm", AlwaysActive = true }
+                        : new CreateLocationData { MapPath = "Maps\\Cellar", AlwaysActive = false };
                     data[name] = entry;
                 }
             });
@@ -111,6 +131,31 @@ internal static class Farms
             return true;
         __instance.AddDefaultBuilding("Shipping Bin", __instance.GetStarterShippingBinLocation(), load);
         return false;
+    }
+
+    // ---------- growing ----------
+
+    /// <summary>Server: open the next farm (with its four cabins) and send it to everyone online. Returns its name.</summary>
+    public static string? OpenFarm()
+    {
+        if (SV.Role != Role.Server || serverOpen >= MaxFarms)
+            return null;
+        serverOpen++;
+        string name = LocationName(serverOpen);
+        Helper.GameContent.InvalidateCache("Data/Locations"); // SMAPI reloads Game1.locationData with the new farm
+        GameLocation farm = Game1.CreateGameLocation(name);
+        Game1.locations.Add(farm);
+        farm.AddDefaultBuildings();
+        for (int i = 0; i < PlayersPerFarm; i++)
+            Server.BuildCabin(farm, i);
+        FarmRoster.Load(); // gives it an invite code
+        Server.SetPlayerLimit();
+        var send = AccessTools.Method(typeof(GameServer), "sendLocation");
+        if (Game1.server is GameServer gs)
+            foreach (long peer in Game1.otherFarmers.Keys.ToList())
+                send.Invoke(gs, new object[] { peer, farm, false });
+        Log.Info($"Opened {DisplayName(name)}: {serverOpen} farms now.");
+        return name;
     }
 
     // ---------- who lives where ----------

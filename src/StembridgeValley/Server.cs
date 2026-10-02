@@ -44,11 +44,11 @@ internal static class Server
     }
 
     /// <summary>Vanilla allows 8 players per farm. The limit is just a number; the network layer sizes itself from it.</summary>
-    private static void SetPlayerLimit()
+    internal static void SetPlayerLimit()
     {
-        int limit = Math.Clamp(SV.Config.Server.MaxPlayers, 2, 64);
+        int limit = Math.Clamp(SV.Config.Server.MaxPlayers, 2, 128);
         if (Farms.Enabled)
-            limit = Math.Max(limit, 1 + Farms.Count * Farms.PlayersPerFarm);
+            limit = Math.Max(limit, 1 + Math.Min(Farms.Count + 1, Farms.MaxFarms) * Farms.PlayersPerFarm); // room for one more farm
         Game1.Multiplayer.playerLimit = limit;
         if (Game1.netWorldState?.Value != null)
             Game1.netWorldState.Value.CurrentPlayerLimit = limit;
@@ -59,6 +59,9 @@ internal static class Server
         // Tests can run a second server next to the live one.
         if (__instance is Lidgren.Network.NetServer && int.TryParse(Environment.GetEnvironmentVariable("SV_PORT"), out int port) && port > 0)
             __instance.Configuration.Port = port;
+        // Connection slots are fixed once the server starts; leave room for every farm the world can grow to.
+        if (__instance is Lidgren.Network.NetServer && Farms.Enabled)
+            __instance.Configuration.MaximumConnections = Math.Max(__instance.Configuration.MaximumConnections, (1 + Farms.MaxFarms * Farms.PlayersPerFarm) * 2);
         if (SV.Config.Server.TryAutomaticPortForward && __instance is Lidgren.Network.NetServer && __instance.Configuration.Port == 24642)
         {
             try { __instance.Configuration.EnableUPnP = true; }
@@ -191,6 +194,7 @@ internal static class Server
     {
         if (Farms.Enabled)
         {
+            FarmRoster.KeepOneEmptyFarm();
             FarmRoster.EnsureCabins();
             return;
         }
