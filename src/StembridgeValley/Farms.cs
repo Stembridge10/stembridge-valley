@@ -148,6 +148,7 @@ internal static class Farms
         farm.AddDefaultBuildings();
         for (int i = 0; i < PlayersPerFarm; i++)
             Server.BuildCabin(farm, i);
+        Server.AlignCabins();
         FarmRoster.Load(); // gives it an invite code
         Server.SetPlayerLimit();
         var send = AccessTools.Method(typeof(GameServer), "sendLocation");

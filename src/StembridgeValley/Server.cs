@@ -170,6 +170,7 @@ internal static class Server
         {
             FarmRoster.Load();
             FarmRoster.EnsureCabins();
+            AlignCabins();
             Log.Info($"{Farms.Count} farms: " + string.Join(", ", Farms.AllNames.Select(f => $"{Farms.DisplayName(f)} ({Farms.MembersOf(f).Count}/4)")));
         }
         Helper.Data.WriteGlobalData(SaveKey, new ServerSaveData { SaveName = Constants.SaveFolderName });
@@ -220,7 +221,11 @@ internal static class Server
     /// <summary>Build one ready-made cabin (with its blank farmhand) on a farm, near where the farmhouse would be.</summary>
     internal static bool BuildCabin(GameLocation farm, int index)
     {
-        foreach (var tile in CabinSpots(farm))
+        // 4-player farms: cabins stand side by side in one row where the farmhouse would be.
+        IEnumerable<Vector2> spots = CabinSpots(farm);
+        if (Farms.IsFarm(farm) && index < Farms.PlayersPerFarm)
+            spots = spots.Prepend(RowSpot(index));
+        foreach (var tile in spots)
         {
             if (!SpotIsClear(farm, tile))
                 continue;
@@ -248,26 +253,46 @@ internal static class Server
     /// Wild debris (weeds, stones, twigs, wild trees, stumps, boulders, bushes) is fine: it gets cleared.
     /// Crops, fruit trees, chests, machines, paths and other buildings are never touched.
     /// </summary>
-    private static bool SpotIsClear(GameLocation farm, Vector2 tile)
+    private static bool SpotIsClear(GameLocation farm, Vector2 tile, bool ignoreCabins = false)
+        => WhyNotClear(farm, tile, ignoreCabins) == null;
+
+    /// <summary>What blocks a cabin here (null if nothing).</summary>
+    private static string? WhyNotClear(GameLocation farm, Vector2 tile, bool ignoreCabins = false)
     {
         for (int x = (int)tile.X - 1; x <= tile.X + CabinW; x++)
             for (int y = (int)tile.Y - 1; y <= tile.Y + CabinH + 1; y++)
             {
                 var v = new Vector2(x, y);
-                if (!farm.isTileOnMap(v) || farm.getBuildingAt(v) != null)
-                    return false;
-                if (farm.doesTileHaveProperty(x, y, "Diggable", "Back") == null)
-                    return false;
-                if (farm.doesTileHavePropertyNoNull(x, y, "Buildable", "Back").Equals("f", StringComparison.OrdinalIgnoreCase))
-                    return false;
+                if (!farm.isTileOnMap(v))
+                    return $"{x},{y} off the map";
+                Building? here = farm.getBuildingAt(v);
+                if (here != null && !(ignoreCabins && here.isCabin))
+                    return $"{x},{y} building {here.buildingType.Value}";
+                // Under a cabin that's about to move, the game reports the cabin's own tiles; look at the map ground instead.
+                bool underCabin = here != null;
+                if ((underCabin ? MapProp(farm, x, y, "Diggable") : farm.doesTileHaveProperty(x, y, "Diggable", "Back")) == null)
+                    return $"{x},{y} not diggable";
+                if ((underCabin ? MapProp(farm, x, y, "Buildable") ?? "" : farm.doesTileHavePropertyNoNull(x, y, "Buildable", "Back")).Equals("f", StringComparison.OrdinalIgnoreCase))
+                    return $"{x},{y} not buildable";
                 if (farm.isWaterTile(x, y) || farm.map.GetLayer("Buildings")?.Tiles[x, y] != null)
-                    return false; // cliffs, fences on the map itself
+                    return $"{x},{y} water or map wall"; // cliffs, fences on the map itself
                 if (farm.terrainFeatures.TryGetValue(v, out var tf) && !IsWild(tf))
-                    return false;
+                    return $"{x},{y} {tf.GetType().Name}";
                 if (farm.objects.TryGetValue(v, out var obj) && !(obj.IsWeeds() || obj.IsBreakableStone() || obj.IsTwig()))
-                    return false;
+                    return $"{x},{y} {obj.Name}";
             }
-        return true;
+        return null;
+    }
+
+    /// <summary>A Back-layer property straight from the map, ignoring buildings on top.</summary>
+    private static string? MapProp(GameLocation farm, int x, int y, string key)
+    {
+        var tile = farm.map.GetLayer("Back")?.Tiles[x, y];
+        if (tile == null)
+            return null;
+        if (tile.Properties.TryGetValue(key, out var v) || tile.TileIndexProperties.TryGetValue(key, out v))
+            return v?.ToString();
+        return null;
     }
 
     private static bool IsWild(StardewValley.TerrainFeatures.TerrainFeature tf) => tf switch
@@ -291,6 +316,46 @@ internal static class Server
         var pixels = new Rectangle(area.X * 64, area.Y * 64, area.Width * 64, area.Height * 64);
         farm.resourceClumps.RemoveWhere(r => r.getBoundingBox().Intersects(pixels));
         farm.largeTerrainFeatures.RemoveWhere(l => l.getBoundingBox().Intersects(pixels));
+    }
+
+    /// <summary>Cabin slot in the row: four cabins, two tiles apart, on the open ground below where the farmhouse would be.</summary>
+    private static Vector2 RowSpot(int index) => new(49 + index * 7, 19);
+
+    /// <summary>
+    /// Line up the cabins on each 4-player farm (once per farm; afterwards players may move them with Robin).
+    /// Cabins are moved, not rebuilt, so everything inside stays. Skips a farm if anyone is on it,
+    /// or if the row has something a player made in the way.
+    /// </summary>
+    internal static void AlignCabins()
+    {
+        foreach (string name in Farms.AllNames)
+        {
+            if (Game1.getLocationFromName(name) is not GameLocation farm || farm.modData.ContainsKey("SV.CabinsInRow"))
+                continue;
+            var cabins = farm.buildings.Where(b => b.isCabin).OrderBy(b => b.tileX.Value).ThenBy(b => b.tileY.Value).ToList();
+            if (cabins.Count == 0 || cabins.Count > Farms.PlayersPerFarm || farm.farmers.Any())
+                continue;
+            bool inRow = cabins.Select((b, i) => b.tileX.Value == (int)RowSpot(i).X && b.tileY.Value == (int)RowSpot(i).Y).All(ok => ok);
+            if (!inRow)
+            {
+                string? why = cabins.Select((_, i) => WhyNotClear(farm, RowSpot(i), ignoreCabins: true)).FirstOrDefault(w => w != null);
+                if (why != null)
+                {
+                    Log.Warn($"Couldn't line up the cabins on {name}: {why}.");
+                    continue;
+                }
+                for (int i = 0; i < cabins.Count; i++)
+                {
+                    Vector2 t = RowSpot(i);
+                    ClearSpot(farm, t);
+                    cabins[i].tileX.Value = (int)t.X;
+                    cabins[i].tileY.Value = (int)t.Y;
+                    cabins[i].updateInteriorWarps();
+                }
+                Log.Info($"Lined up {cabins.Count} cabins on {name}.");
+            }
+            farm.modData["SV.CabinsInRow"] = "1";
+        }
     }
 
     /// <summary>Every farm tile, nearest to the farmhouse first, so cabins pack into whatever room is left.</summary>

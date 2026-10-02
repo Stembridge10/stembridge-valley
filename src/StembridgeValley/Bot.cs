@@ -1,3 +1,4 @@
+using StardewValley.Buildings;
 using HarmonyLib;
 using Microsoft.Xna.Framework;
 using StardewModdingAPI;
@@ -52,6 +53,8 @@ internal static class Bot
         }
         if (!Context.IsPlayerFree || Game1.player.controller != null || e.Ticks < nextActionTick)
             return;
+        if (Environment.GetEnvironmentVariable("SV_BOT_DOOR_CHECK") == "1" && DoorCheck(e.Ticks))
+            return;
 
         nextActionTick = (int)e.Ticks + rng.Next(180, 480); // every 3-8 seconds
         actions++;
@@ -68,6 +71,56 @@ internal static class Bot
         {
             Log.Debug($"[bot] action failed: {ex.Message}");
         }
+    }
+
+    private static int doorStage, doorWait;
+
+    /// <summary>Test: walk out of our own cabin through its real door warp, report where we land, then photograph the farm.</summary>
+    private static bool DoorCheck(uint tick)
+    {
+        switch (doorStage)
+        {
+            case 0 when Game1.currentLocation is StardewValley.Locations.Cabin cabin:
+            {
+                Warp w = cabin.warps.First();
+                Building? b = cabin.ParentBuilding;
+                Point door = b == null ? Point.Zero : new Point(b.tileX.Value + b.humanDoor.X, b.tileY.Value + b.humanDoor.Y + 1);
+                Log.Info($"[doorcheck] cabin exit warp -> {w.TargetName} {w.TargetX},{w.TargetY}; door front {door.X},{door.Y}");
+                Game1.player.warpFarmer(w);
+                doorStage = 1;
+                return true;
+            }
+            case 0:
+                return false;
+            case 1 when Game1.currentLocation is StardewValley.Locations.Cabin || Game1.locationRequest != null:
+                return true; // still walking out
+            case 1:
+                Log.Info($"[doorcheck] after leaving: {Game1.currentLocation?.Name} {Game1.player.TilePoint.X},{Game1.player.TilePoint.Y}");
+                var b2 = Game1.currentLocation?.buildings.Where(x => x.isCabin).OrderBy(x => x.tileX.Value)
+                    .Select(x => $"{x.tileX.Value},{x.tileY.Value}");
+                Log.Info($"[doorcheck] cabins here: {string.Join(" ", b2 ?? Array.Empty<string>())}");
+                Game1.game1.takeMapScreenshot(0.25f, "cabin-row", () => Log.Info("[doorcheck] screenshot saved"));
+                doorStage = 2;
+                return true;
+            case 2:
+                // and back in through the door
+                var mine = Game1.currentLocation?.buildings.FirstOrDefault(x => x.isCabin && x.GetIndoors() is StardewValley.Locations.Cabin c && c.owner == Game1.player);
+                if (mine != null)
+                {
+                    Point d = new(mine.tileX.Value + mine.humanDoor.X, mine.tileY.Value + mine.humanDoor.Y);
+                    bool ok = mine.doAction(new Vector2(d.X, d.Y), Game1.player);
+                    Log.Info($"[doorcheck] knocked on own door at {d.X},{d.Y}: {ok}");
+                }
+                doorStage = 3;
+                return true;
+            case 3 when Game1.currentLocation is not StardewValley.Locations.Cabin && ++doorWait < 600:
+                return true; // still walking in
+            case 3:
+                Log.Info($"[doorcheck] after entering: {Game1.currentLocation?.Name}");
+                doorStage = 4;
+                return true;
+        }
+        return doorStage < 4;
     }
 
     private static void ClearPopups()
