@@ -29,6 +29,12 @@ STATE = Path(os.environ["SV_STATE_DIR"])
 ROSTER = STATE / "discord-players.json"
 ADDRESS = os.environ["SV_PUBLIC_ADDRESS"]
 GUILD_ID = int(os.environ.get("SV_GUILD_ID") or 0) or None
+# Only servers Stembridge owns count, so nobody can add the bot to their own server and hand out codes.
+OWNER_ID = int(os.environ.get("SV_OWNER_ID") or 0) or None
+
+
+def allowed_guild(g):
+    return g is not None and (GUILD_ID is None or g.id == GUILD_ID) and (OWNER_ID is None or g.owner_id == OWNER_ID)
 TOKEN = Path(os.environ["SV_BOT_TOKEN_FILE"]).read_text().strip()
 
 
@@ -107,7 +113,7 @@ def ensure_player(member, friend=None, fresh=False):
 
 
 def allowed(inter):
-    return inter.guild is not None and (GUILD_ID is None or inter.guild.id == GUILD_ID)
+    return allowed_guild(inter.guild)
 
 
 @tree.command(name="play", description="Get your personal Stembridge Valley invite code (sent privately).")
@@ -135,13 +141,13 @@ async def newcode(inter: discord.Interaction):
 
 @client.event
 async def on_member_ban(guild, user):
-    if GUILD_ID is None or guild.id == GUILD_ID:
+    if allowed_guild(guild):
         set_revoked(str(user.id), True)
 
 
 @client.event
 async def on_member_unban(guild, user):
-    if GUILD_ID is None or guild.id == GUILD_ID:
+    if allowed_guild(guild):
         set_revoked(str(user.id), False)
 
 
@@ -155,7 +161,7 @@ async def still_member(guild, uid):
 
 async def reconcile():
     """Anyone with a code who isn't in the server any more (left, kicked or banned) is revoked; anyone back is restored."""
-    guilds = [g for g in client.guilds if GUILD_ID is None or g.id == GUILD_ID]
+    guilds = [g for g in client.guilds if allowed_guild(g)]
     if not guilds:
         return
     data = load()
@@ -187,10 +193,13 @@ async def periodic():
 
 @client.event
 async def on_ready():
-    for g in client.guilds:
-        if GUILD_ID is None or g.id == GUILD_ID:
+    for g in list(client.guilds):
+        if allowed_guild(g):
             tree.copy_global_to(guild=g)
             await tree.sync(guild=g)
+        else:
+            log.warning("leaving %s: not Stembridge's server", g.name)
+            await g.leave()
     log.info("ready as %s in %s", client.user, [g.name for g in client.guilds])
     if not periodic.is_running():
         periodic.start()
@@ -198,6 +207,10 @@ async def on_ready():
 
 @client.event
 async def on_guild_join(guild):
+    if not allowed_guild(guild):
+        log.warning("leaving %s: not Stembridge's server", guild.name)
+        await guild.leave()
+        return
     tree.copy_global_to(guild=guild)
     await tree.sync(guild=guild)
     log.info("joined %s", guild.name)
