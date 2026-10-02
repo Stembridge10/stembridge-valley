@@ -47,6 +47,8 @@ internal static class Server
     private static void SetPlayerLimit()
     {
         int limit = Math.Clamp(SV.Config.Server.MaxPlayers, 2, 64);
+        if (Farms.Enabled)
+            limit = Math.Max(limit, 1 + Farms.Count * Farms.PlayersPerFarm);
         Game1.Multiplayer.playerLimit = limit;
         if (Game1.netWorldState?.Value != null)
             Game1.netWorldState.Value.CurrentPlayerLimit = limit;
@@ -54,6 +56,9 @@ internal static class Server
 
     private static void NetStart_Prefix(Lidgren.Network.NetPeer __instance)
     {
+        // Tests can run a second server next to the live one.
+        if (__instance is Lidgren.Network.NetServer && int.TryParse(Environment.GetEnvironmentVariable("SV_PORT"), out int port) && port > 0)
+            __instance.Configuration.Port = port;
         if (SV.Config.Server.TryAutomaticPortForward && __instance is Lidgren.Network.NetServer && __instance.Configuration.Port == 24642)
         {
             try { __instance.Configuration.EnableUPnP = true; }
@@ -112,7 +117,8 @@ internal static class Server
         Game1.multiplayerMode = 2;
         Game1.player.team.useSeparateWallets.Value = true;
         Game1.cabinsSeparate = false;
-        Game1.startingCabins = Math.Clamp(cfg.StartingCabins, 1, 7);
+        // With 4-player farms nobody lives on the normal farm, so it gets no cabins.
+        Game1.startingCabins = Farms.Enabled ? 0 : Math.Clamp(cfg.StartingCabins, 1, 7);
         Game1.whichFarm = cfg.FarmType;
         Game1.whichModFarm = null;
         Game1.spawnMonstersAtNight = cfg.FarmType == 4;
@@ -157,6 +163,12 @@ internal static class Server
         Game1.player.ignoreCollisions = true;
         Game1.netWorldState.Value.IsPaused = false;
         SetPlayerLimit();
+        if (Farms.Enabled)
+        {
+            FarmRoster.Load();
+            FarmRoster.EnsureCabins();
+            Log.Info($"{Farms.Count} farms: " + string.Join(", ", Farms.AllNames.Select(f => $"{Farms.DisplayName(f)} ({Farms.MembersOf(f).Count}/4)")));
+        }
         Helper.Data.WriteGlobalData(SaveKey, new ServerSaveData { SaveName = Constants.SaveFolderName });
         status = "running";
         Log.Info($"Farm is up: {Game1.player.farmName.Value}. Players join at this PC's address, port 24642.");
@@ -177,6 +189,11 @@ internal static class Server
     /// </summary>
     internal static void EnsureFreeCabin()
     {
+        if (Farms.Enabled)
+        {
+            FarmRoster.EnsureCabins();
+            return;
+        }
         // Keep two free so two people joining at the same moment don't both grab the last one.
         for (int built = 0; built < 2; built++)
             if (!BuildCabinIfNeeded(wantFree: 2))
@@ -191,24 +208,32 @@ internal static class Server
         if (free >= wantFree || cabins.Count >= Game1.Multiplayer.playerLimit - 1)
             return false;
 
+        return BuildCabin(farm, cabins.Count);
+    }
+
+    private static readonly string[] CabinSkins = { "Log Cabin", "Stone Cabin", "Plank Cabin", "Rustic Cabin" };
+
+    /// <summary>Build one ready-made cabin (with its blank farmhand) on a farm, near where the farmhouse would be.</summary>
+    internal static bool BuildCabin(GameLocation farm, int index)
+    {
         foreach (var tile in CabinSpots(farm))
         {
             if (!SpotIsClear(farm, tile))
                 continue;
             ClearSpot(farm, tile);
             var cabin = new Building("Cabin", tile);
-            cabin.skinId.Value = "Log Cabin";
+            cabin.skinId.Value = CabinSkins[index % CabinSkins.Length];
             cabin.magical.Value = true;
             cabin.daysOfConstructionLeft.Value = 0;
             cabin.load();
             // Our own placement check above; the game's check reads the host's current map, which on a server isn't the farm.
             if (farm.buildStructure(cabin, tile, Game1.player, skipSafetyChecks: true))
             {
-                Log.Info($"Built cabin #{cabins.Count + 1} at {tile.X},{tile.Y} for the next player.");
+                Log.Info($"Built cabin #{index + 1} on {farm.Name} at {tile.X},{tile.Y}.");
                 return true;
             }
         }
-        Log.Warn("No room found for another cabin.");
+        Log.Warn($"No room found for another cabin on {farm.Name}.");
         return false;
     }
 
@@ -219,7 +244,7 @@ internal static class Server
     /// Wild debris (weeds, stones, twigs, wild trees, stumps, boulders, bushes) is fine: it gets cleared.
     /// Crops, fruit trees, chests, machines, paths and other buildings are never touched.
     /// </summary>
-    private static bool SpotIsClear(Farm farm, Vector2 tile)
+    private static bool SpotIsClear(GameLocation farm, Vector2 tile)
     {
         for (int x = (int)tile.X - 1; x <= tile.X + CabinW; x++)
             for (int y = (int)tile.Y - 1; y <= tile.Y + CabinH + 1; y++)
@@ -249,7 +274,7 @@ internal static class Server
         _ => false,
     };
 
-    private static void ClearSpot(Farm farm, Vector2 tile)
+    private static void ClearSpot(GameLocation farm, Vector2 tile)
     {
         var area = new Rectangle((int)tile.X - 1, (int)tile.Y - 1, CabinW + 2, CabinH + 3);
         for (int x = area.Left; x < area.Right; x++)
@@ -265,10 +290,10 @@ internal static class Server
     }
 
     /// <summary>Every farm tile, nearest to the farmhouse first, so cabins pack into whatever room is left.</summary>
-    private static IEnumerable<Vector2> CabinSpots(Farm farm)
+    private static IEnumerable<Vector2> CabinSpots(GameLocation location)
     {
-        Point house = farm.GetMainFarmHouseEntry();
-        int w = farm.map.Layers[0].LayerWidth, h = farm.map.Layers[0].LayerHeight;
+        Point house = location is Farm farm ? farm.GetMainFarmHouseEntry() : new Point(64, 15);
+        int w = location.map.Layers[0].LayerWidth, h = location.map.Layers[0].LayerHeight;
         return Enumerable.Range(1, w - CabinW - 2).SelectMany(x => Enumerable.Range(1, h - CabinH - 3).Select(y => new Vector2(x, y)))
             .OrderBy(v => Math.Abs(v.X - house.X) + Math.Abs(v.Y - house.Y));
     }

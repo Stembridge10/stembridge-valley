@@ -19,7 +19,7 @@ internal static class Bot
     private static readonly Random rng = new();
     private static readonly string[] Places = { "Farm", "Farm", "Farm", "Town", "BusStop", "Forest", "Mountain", "Beach" };
     private static readonly string[] Lines = { "hi", "anyone want parsnips?", "heading to town", "nice day", "brb", "lol", "where's the mine", "gm" };
-    private static int nextActionTick, actions, ticks, warps, farmed, chats, drawCounter;
+    private static int nextActionTick, actions, ticks, warps, farmed, chats, drawCounter, visits, blocked, leaks, homeTrips, homeMisses;
     private static DateTime windowStart = DateTime.UtcNow;
 
     public static void Apply(IModHelper helper, Harmony harmony)
@@ -30,7 +30,7 @@ internal static class Bot
         harmony.Patch(AccessTools.Method(typeof(Game1), "Draw", new[] { typeof(GameTime) }),
             prefix: new HarmonyMethod(typeof(Bot), nameof(Draw_Prefix)));
         helper.Events.GameLoop.UpdateTicked += OnTicked;
-        SV.WriteFlag("bot.csv", "time,connected,location,ping_ms,tps,actions,warps,farmed,chats,mem_mb\n");
+        SV.WriteFlag("bot.csv", "time,connected,location,ping_ms,tps,actions,warps,farmed,chats,mem_mb,home,visits,blocked,leaks,home_trips,home_misses\n");
     }
 
     private static bool Draw_Prefix() => Game1.activeClickableMenu is SaveGameMenu || ++drawCounter % 60 == 0;
@@ -44,6 +44,12 @@ internal static class Bot
         if (!Context.IsWorldReady)
             return;
         ClearPopups();
+        if (pendingHomeCheck != null && Context.IsPlayerFree && Game1.locationRequest == null)
+        {
+            homeTrips++;
+            if (Game1.currentLocation?.Name != pendingHomeCheck) homeMisses++;
+            pendingHomeCheck = null;
+        }
         if (!Context.IsPlayerFree || Game1.player.controller != null || e.Ticks < nextActionTick)
             return;
 
@@ -52,8 +58,9 @@ internal static class Bot
         try
         {
             int roll = rng.Next(100);
-            if (roll < 50) Walk();
-            else if (roll < 68) Warp();
+            if (roll < 45) Walk();
+            else if (roll < 58) Warp();
+            else if (Farms.Enabled && roll < 68) Visit();
             else if (roll < 92) Farm();
             else Chat();
         }
@@ -115,7 +122,7 @@ internal static class Bot
     /// <summary>On the farm: till a nearby open tile, water it and plant a parsnip; elsewhere just walk.</summary>
     private static void Farm()
     {
-        if (Game1.currentLocation is not StardewValley.Farm farm)
+        if (Game1.currentLocation is not StardewValley.Farm farm || !Farms.CanTouch(farm, Game1.player))
         {
             Walk();
             return;
@@ -151,6 +158,60 @@ internal static class Bot
         Walk();
     }
 
+    /// <summary>
+    /// 4-player farms: go to someone else's farm and try the things a visitor must not be able to do,
+    /// through the same game calls a real click uses. Then "go to the farm" must land on our own farm.
+    /// </summary>
+    private static void Visit()
+    {
+        string? home = Farms.HomeFarmOf(Game1.player);
+        if (Farms.IsFarm(Game1.currentLocation) && Game1.currentLocation.Name != home)
+        {
+            TryToMeddle(Game1.currentLocation);
+            // Head home through the vanilla "Farm" name: must be redirected.
+            pendingHomeCheck = home;
+            Game1.warpFarmer("Farm", 64, 15, 2);
+            return;
+        }
+        var others = Farms.AllNames.Where(n => n != home && Farms.MembersOf(n).Count > 0).ToList();
+        if (others.Count == 0)
+            return;
+        Game1.warpFarmer(others[rng.Next(others.Count)], Farms.RoadEntry.X, Farms.RoadEntry.Y, 3);
+        visits++;
+    }
+
+    private static string? pendingHomeCheck;
+
+    private static void TryToMeddle(GameLocation loc)
+    {
+        // 1. Place a torch on an open tile.
+        Point here = Game1.player.TilePoint;
+        for (int i = 0; i < 10; i++)
+        {
+            var t = new Vector2(here.X + rng.Next(-3, 4), here.Y + rng.Next(-3, 4));
+            if (!loc.CanItemBePlacedHere(t))
+                continue;
+            var torch = (StardewValley.Object)ItemRegistry.Create("(O)93");
+            bool ok = Utility.tryToPlaceItem(loc, torch, (int)t.X * 64 + 32, (int)t.Y * 64 + 32);
+            if (ok || loc.objects.ContainsKey(t)) leaks++; else blocked++;
+            break;
+        }
+        // 2. Interact with something they own (crop, chest, machine, bin).
+        var target = loc.terrainFeatures.Pairs.Where(p => p.Value is HoeDirt).Select(p => p.Key)
+            .Concat(loc.objects.Keys).FirstOrDefault(new Vector2(-1, -1));
+        if (target.X >= 0)
+        {
+            int before = loc.objects.Count() + loc.terrainFeatures.Count();
+            bool ok = Game1.tryToCheckAt(target, Game1.player);
+            if (ok || loc.objects.Count() + loc.terrainFeatures.Count() != before) leaks++; else blocked++;
+        }
+        // 3. Swing a tool.
+        Game1.player.CurrentToolIndex = Math.Max(0, Game1.player.Items.IndexOf(Game1.player.Items.FirstOrDefault(x => x is StardewValley.Tools.Hoe)));
+        float stamina = Game1.player.Stamina;
+        Game1.pressUseToolButton();
+        if (Game1.player.UsingTool || Game1.player.Stamina < stamina) leaks++; else blocked++;
+    }
+
     private static void Chat()
     {
         Game1.Multiplayer.sendChatMessage(LocalizedContentManager.CurrentLanguageCode, Lines[rng.Next(Lines.Length)], Multiplayer.AllPlayers);
@@ -174,7 +235,7 @@ internal static class Bot
         catch { }
         string where = Context.IsWorldReady ? Game1.currentLocation?.NameOrUniqueName ?? "-" : (Game1.activeClickableMenu?.GetType().Name ?? "-");
         long mem = System.Diagnostics.Process.GetCurrentProcess().WorkingSet64 / (1024 * 1024);
-        string line = $"{DateTime.Now:HH:mm:ss},{(connected && Context.IsWorldReady ? 1 : 0)},{where},{ping:0},{ticks / secs:0.0},{actions},{warps},{farmed},{chats},{mem}\n";
+        string line = $"{DateTime.Now:HH:mm:ss},{(connected && Context.IsWorldReady ? 1 : 0)},{where},{ping:0},{ticks / secs:0.0},{actions},{warps},{farmed},{chats},{mem},{(Context.IsWorldReady ? Farms.HomeFarmOf(Game1.player) ?? "-" : "-")},{visits},{blocked},{leaks},{homeTrips},{homeMisses}\n";
         ticks = 0;
         try { File.AppendAllText(Path.Combine(SV.StateDir, "bot.csv"), line); } catch { }
     }

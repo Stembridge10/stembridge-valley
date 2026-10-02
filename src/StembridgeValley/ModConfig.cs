@@ -42,6 +42,8 @@ public sealed class ServerConfig
 {
     public string FarmName { get; set; } = "Stembridge Valley";
     public int StartingCabins { get; set; } = 3;
+    /// <summary>Separate 4-player farms in the shared world. 0 = classic single shared farm.</summary>
+    public int FarmCount { get; set; } = 5;
     /// <summary>Most players on the farm at once, counting the hidden server's own farmer. Vanilla is 8.</summary>
     public int MaxPlayers { get; set; } = 8;
     /// <summary>0 = Standard farm.</summary>
