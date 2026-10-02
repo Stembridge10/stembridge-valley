@@ -31,6 +31,9 @@ internal static class SV
         Address = Env("SV_ADDRESS");
         Password = Env("SV_PASSWORD");
         PlayerKey = Env("SV_PLAYER_KEY");
+        // A Discord code (d-DISCORDID-TOKEN) makes the character belong to the Discord account, whatever PC this is.
+        if (Discord.TrySplit(Password, out string discordId, out _))
+            PlayerKey = Discord.KeyPrefix + discordId;
         PackVersion = Env("SV_PACK_VERSION") is { Length: > 0 } v ? v : "dev";
         StateDir = Env("SV_STATE_DIR");
     }

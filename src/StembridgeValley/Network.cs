@@ -75,6 +75,13 @@ internal static class Network
             SV.WriteFlag("bad-password.txt", "The server password was wrong.");
             Exit();
         }
+        else if (message.StartsWith(Discord.DenyMods, StringComparison.Ordinal))
+        {
+            string list = message[Discord.DenyMods.Length..];
+            Log.Error($"Server turned us away for extra mods: {list}");
+            SV.WriteFlag("extra-mods.txt", list);
+            Exit();
+        }
     }
 
     private static void ClientUserId_Postfix(ref string __result)
@@ -112,7 +119,27 @@ internal static class Network
 
         string who = __instance.RemoteEndPoint?.ToString() ?? "?";
         string? invitedFarm = null;
-        bool inviteOk = !Farms.Enabled ? true : FarmRoster.TryReadInvite(password, out password, out invitedFarm);
+        string discordName = "";
+        bool inviteOk;
+        if (password.StartsWith(Discord.CodePrefix, StringComparison.Ordinal))
+        {
+            // Personal Discord code: the character belongs to the Discord account, whatever PC they're on.
+            inviteOk = Discord.TryReadCode(password, out string discordKey, out discordName, out invitedFarm);
+            if (inviteOk)
+            {
+                key = discordKey;
+                password = SV.Password;
+            }
+            else
+                Log.Warn($"Turned away {who}: Discord code not recognised, or the player was banned or left the Discord.");
+        }
+        else if (Discord.Required)
+        {
+            inviteOk = false;
+            Log.Warn($"Turned away {who}: old-style invite; a Discord code is needed now.");
+        }
+        else
+            inviteOk = !Farms.Enabled || FarmRoster.TryReadInvite(password, out password, out invitedFarm);
         if (tag != SV.HailTag || !inviteOk || !string.Equals(password, SV.Password, StringComparison.Ordinal) || key.Length < 8)
         {
             Log.Warn($"Turned away {who}: wrong password or not using the Stembridge Valley launcher.");
@@ -128,17 +155,28 @@ internal static class Network
 
         KeyByConnection["L_" + __instance.RemoteUniqueIdentifier] = key;
         InvitedFarmByConnection["L_" + __instance.RemoteUniqueIdentifier] = invitedFarm;
-        Log.Info($"Approved connection from {who} (player {Short(key)}{(invitedFarm != null ? ", invited to " + Farms.DisplayName(invitedFarm) : "")}).");
+        Log.Info($"Approved connection from {who} (player {Short(key)}{(discordName != "" ? ", Discord " + discordName : "")}{(invitedFarm != null ? ", placed with " + Farms.DisplayName(invitedFarm) : "")}).");
         return true;
     }
 
     /// <summary>Use the player key as the farmhand owner ID, so a farmhand can only be used by the player who created it.</summary>
-    private static void CheckFarmhand_Prefix(ref string userId, string connectionId, NetFarmerRoot farmer)
+    private static bool CheckFarmhand_Prefix(ref string userId, string connectionId, NetFarmerRoot farmer)
     {
         if (!KeyByConnection.TryGetValue(connectionId, out string? key))
-            return;
+            return true;
         userId = key;
+        // Mod check: same mods as the server, nothing extra. (SMAPI sends the mod list just before this.)
+        // (Skip it if that farmer is already online: the game itself turns that request down.)
+        if (farmer.Value != null && !Game1.otherFarmers.ContainsKey(farmer.Value.UniqueMultiplayerID)
+            && Discord.ExtraMods(farmer.Value.UniqueMultiplayerID) is { Count: > 0 } extra)
+        {
+            string list = string.Join(", ", extra);
+            Log.Warn($"Turned away player {Short(key)}: extra mods {list}.");
+            Discord.Refuse(connectionId, Discord.DenyMods + list);
+            return false;
+        }
         BeginPlacement(key, connectionId);
+        return true;
     }
 
     private static void SendAvailable_Prefix(ref string userId, string connectionId)

@@ -91,11 +91,21 @@ internal static class Program
             }
             if (File.Exists(Path.Combine(StateDir, "bad-password.txt")))
             {
-                Say("The server didn't accept your invite. Ask Stembridge for a fresh invite code.");
-                settings.Address = "";
+                Say("The server didn't accept your code.");
+                Say("Get a fresh one: type /play in the Stembridge Valley Discord.");
+                AskForInvite(settings, null);
                 Save(settings);
+                attempt = -1; // fresh code: start over
+                continue;
+            }
+            string extraMods = Path.Combine(StateDir, "extra-mods.txt");
+            if (File.Exists(extraMods))
+            {
+                Say("The server only allows the Stembridge Valley mod pack, and your game had extra mods:");
+                Say("  " + File.ReadAllText(extraMods).Trim());
+                Say($"Remove them from {Path.Combine(Root, "Mods")} and start the launcher again.");
                 Pause();
-                return 3;
+                return 5;
             }
             Say(code == 0 ? "See you next time!" : $"Stardew closed (code {code}).");
             Thread.Sleep(1500);
@@ -136,8 +146,8 @@ internal static class Program
         {
             if (invite == null)
             {
-                Say("Paste the invite code Stembridge sent you, then press Enter.");
-                Say("(It looks like  sv:1.2.3.4:24642/acorn-berry-fig-42 )");
+                Say("Paste your invite code, then press Enter.");
+                Say("(Get yours by typing /play in the Stembridge Valley Discord. It starts with  sv: )");
                 Console.Write("> ");
                 invite = Console.ReadLine();
             }
@@ -202,7 +212,7 @@ internal static class Program
     private static void ClearFlags()
     {
         Directory.CreateDirectory(StateDir);
-        foreach (string f in new[] { "update-needed.txt", "bad-password.txt", "joined.txt" })
+        foreach (string f in new[] { "update-needed.txt", "bad-password.txt", "extra-mods.txt", "joined.txt" })
             File.Delete(Path.Combine(StateDir, f));
     }
 
