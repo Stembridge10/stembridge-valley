@@ -126,6 +126,7 @@ internal static class Quarry
         }
         map.Properties["Outdoors"] = "T";
         OpenRightEdge(map);
+        RemoveCave(map);
         return map;
     }
 
@@ -174,6 +175,29 @@ internal static class Quarry
         }
         Set(buildings, 131, 20, null); Set(back, 131, 20, 537); Set(front, 131, 20, 440);         // corners
         Set(buildings, 131, 24, null); Set(back, 131, 24, 537); Set(front, 131, 24, 439);
+    }
+
+    /// <summary>The little cave in the cliff west of the quarry floor leads nowhere here: fill it with plain cliff.</summary>
+    private static void RemoveCave(Map map)
+    {
+        TileSheet? s = map.TileSheets.FirstOrDefault(t => t.Id == "outdoors");
+        Layer? back = map.GetLayer("Back"), buildings = map.GetLayer("Buildings"), front = map.GetLayer("Front"), always = map.GetLayer("AlwaysFront");
+        if (s == null || back == null || buildings == null || front == null || always == null)
+            return;
+        void Set(Layer layer, int x, int y, int? index) =>
+            layer.Tiles[x - SrcX, y] = index is int i ? new StaticTile(layer, s, BlendMode.Alpha, i) : null;
+
+        var cliff = new Dictionary<int, int> { [13] = 493, [14] = 518, [15] = 492, [16] = 517, [17] = 542 };
+        for (int x = 102; x <= 104; x++)
+        {
+            foreach (var (y, i) in cliff)
+                Set(buildings, x, y, i);
+            Set(always, x, 14, null);   // the cave's arch
+        }
+        foreach (var (x, y) in new[] { (102, 12), (103, 13), (102, 15), (103, 15), (104, 14) })
+            Set(front, x, y, null);      // its shading
+        for (int x = 101; x <= 105; x++)
+            Set(back, x, 18, 175);       // the dirt patch at its mouth becomes grass
     }
 
     /// <summary>

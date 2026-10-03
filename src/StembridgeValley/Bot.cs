@@ -318,6 +318,7 @@ internal static class Bot
             case 10:
                 Log.Info($"[quarry] at {Game1.player.TilePoint}; rocks in quarry {(quarry != null ? Quarry.RocksIn(quarry) : -1)}: {string.Join(" ", quarry?.objects.Pairs.Where(p => Quarry.Area.Contains((int)p.Key.X, (int)p.Key.Y)).Select(p => p.Value.ItemId) ?? Array.Empty<string>())}");
                 Snapshot("quarry-inside.png", Quarry.Middle.X, Quarry.Middle.Y);
+                Snapshot("quarry-west.png", 10, 18);
                 Go(new Point(Quarry.Arrival.X, Quarry.Arrival.Y), "back to the quarry entrance");
                 break;
             case 13:
