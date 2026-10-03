@@ -45,6 +45,16 @@ internal static class Quarry
         new("Maps\\Farm_Ranching", Row(-1, 28, 30), new(1, 29), 3, new(0, 28, 4, 3), new(0, 27, 15, 5)),
         // Beach: the dock at the bottom runs on off the bottom edge.
         new("Maps\\Farm_Island", Column(110, 51, 53), new(52, 108), 2, new(51, 95, 3, 15), new(51, 95, 3, 15)),
+        // Riverland: the small south-west bank landing joins the quarry path at the left edge.
+        new("Maps\\Farm_Fishing", Row(-1, 39, 42), new(1, 40), 3, new(0, 39, 5, 4), new(0, 34, 14, 13)),
+        // Forest: a short trail through the left woods.
+        new("Maps\\Farm_Foraging", Row(-1, 26, 29), new(1, 27), 3, new(0, 26, 4, 4), new(0, 21, 13, 13)),
+        // Hill-top: a break in the left ledge beside the southern dirt patch.
+        new("Maps\\Farm_Mining", Row(-1, 36, 39), new(1, 37), 3, new(0, 36, 3, 4), new(0, 31, 12, 13)),
+        // Wilderness: below the large west ledge.
+        new("Maps\\Farm_Combat", Row(-1, 37, 40), new(1, 38), 3, new(0, 37, 3, 4), new(0, 32, 12, 13)),
+        // Four Corners: the existing gap in the west tree belt.
+        new("Maps\\Farm_FourCorners", Row(-1, 35, 38), new(1, 36), 3, new(0, 35, 5, 4), new(0, 30, 14, 13)),
     };
 
     private static Point[] Row(int x, int y0, int y1) => Enumerable.Range(y0, y1 - y0 + 1).Select(y => new Point(x, y)).ToArray();
@@ -123,6 +133,16 @@ internal static class Quarry
             e.Edit(asset => AddMeadowBridge(asset.AsMap().Data));
         else if (e.NameWithoutLocale.IsEquivalentTo("Maps/Farm_Island"))
             e.Edit(asset => ExtendBeachDock(asset.AsMap().Data));
+        else if (e.NameWithoutLocale.IsEquivalentTo("Maps/Farm_Fishing"))
+            e.Edit(asset => OpenRiverlandQuarryPath(asset.AsMap().Data));
+        else if (e.NameWithoutLocale.IsEquivalentTo("Maps/Farm_Foraging"))
+            e.Edit(asset => OpenForestQuarryPath(asset.AsMap().Data));
+        else if (e.NameWithoutLocale.IsEquivalentTo("Maps/Farm_Mining"))
+            e.Edit(asset => OpenHilltopQuarryPath(asset.AsMap().Data));
+        else if (e.NameWithoutLocale.IsEquivalentTo("Maps/Farm_Combat"))
+            e.Edit(asset => OpenWildernessQuarryPath(asset.AsMap().Data));
+        else if (e.NameWithoutLocale.IsEquivalentTo("Maps/Farm_FourCorners"))
+            e.Edit(asset => OpenFourCornersQuarryPath(asset.AsMap().Data));
     }
 
     /// <summary>The quarry area: a copy of the Mountain's quarry corner, with a path through its right-hand forest.</summary>
@@ -344,6 +364,55 @@ internal static class Quarry
             }
             Set(buildings, 50, y, odd ? 525 : 557);
             Set(buildings, 54, y, odd ? 556 : 524);
+        }
+    }
+
+    // Each variant uses the same rock ledge tile recipe as the standard farm's north bank. The two wooded
+    // variants continue the cleared strip only as far as the existing open ground.
+    private static void OpenRiverlandQuarryPath(Map map) => OpenLeftQuarryGate(map, 39, 4);
+    private static void OpenForestQuarryPath(Map map) => OpenLeftQuarryGate(map, 26, 3);
+    private static void OpenHilltopQuarryPath(Map map) => OpenLeftQuarryGate(map, 36, 2);
+    private static void OpenWildernessQuarryPath(Map map) => OpenLeftQuarryGate(map, 37, 2);
+    private static void OpenFourCornersQuarryPath(Map map) => OpenLeftQuarryGate(map, 35, 4);
+
+    private static void OpenLeftQuarryGate(Map map, int y0, int continuationX)
+    {
+        TileSheet? s = map.TileSheets.FirstOrDefault(t => t.Id == "untitled tile sheet");
+        Layer? back = map.GetLayer("Back"), buildings = map.GetLayer("Buildings"), front = map.GetLayer("Front"), always = map.GetLayer("AlwaysFront");
+        if (s == null || back == null || buildings == null || front == null || always == null || back.LayerWidth < 20 || back.LayerHeight <= y0 + 4)
+        {
+            Log.Warn("Quarry: the farm map isn't the expected one; no path to the quarry.");
+            return;
+        }
+        void Set(Layer layer, int x, int y, int? index) =>
+            layer.Tiles[x, y] = index is int i ? new StaticTile(layer, s, BlendMode.Alpha, i) : null;
+
+        foreach (int x in Enumerable.Range(0, 3))
+            Set(buildings, x, y0 - 5, x == 2 ? 444 : 16);
+        int[][] cliff = { new[] { 468, 468, 469 }, new[] { 493, 492, 494 }, new[] { 518, 517, 519 }, new[] { 543, 542, 544 } };
+        for (int row = 0; row < cliff.Length; row++)
+            for (int x = 0; x < 3; x++)
+                Set(buildings, x, y0 - 4 + row, cliff[row][x]);
+
+        for (int y = y0 - 6; y < y0; y++)
+            for (int x = 0; x < 3; x++)
+            {
+                Set(front, x, y, null);
+                Set(always, x, y, null);
+            }
+        for (int x = 0; x <= continuationX; x++)
+            for (int y = y0; y <= y0 + 3; y++)
+            {
+                Set(back, x, y, 587);
+                Set(buildings, x, y, null);
+                Set(front, x, y, null);
+                Set(always, x, y, null);
+            }
+        int[] lip = { 413, 414, 438 };
+        for (int x = 0; x < 3; x++)
+        {
+            Set(front, x, y0 + 3, lip[x]);
+            Set(always, x, y0 + 4, null);
         }
     }
 
