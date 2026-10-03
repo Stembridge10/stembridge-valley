@@ -55,6 +55,8 @@ internal static class Bot
             return;
         if (Environment.GetEnvironmentVariable("SV_BOT_DOOR_CHECK") == "1" && DoorCheck(e.Ticks))
             return;
+        if (Environment.GetEnvironmentVariable("SV_BOT_GATE_CHECK") == "1" && GateCheck())
+            return;
 
         nextActionTick = (int)e.Ticks + rng.Next(180, 480); // every 3-8 seconds
         actions++;
@@ -74,6 +76,63 @@ internal static class Bot
     }
 
     private static int doorStage, doorWait;
+    private static int gateStage, gateWait;
+
+    /// <summary>Test: go stand below the visit gate at the bus stop, click it, and report what opens. Stays there for a screenshot.</summary>
+    private static bool GateCheck()
+    {
+        switch (gateStage)
+        {
+            case 0:
+                Game1.warpFarmer("BusStop", 14, 23, 0);
+                gateStage = 1;
+                return true;
+            case 1 when Game1.currentLocation?.Name != "BusStop" || Game1.locationRequest != null:
+                return true;
+            case 1:
+                if (++gateWait < 150)
+                    return true; // let the screen fade in fully
+                gateWait = 0;
+                var tile = Game1.currentLocation.map.GetLayer("Buildings").Tiles[14, 21];
+                string action = tile?.Properties.TryGetValue("Action", out var a) == true ? a.ToString() : "-";
+                Log.Info($"[gatecheck] at BusStop {Game1.player.TilePoint.X},{Game1.player.TilePoint.Y}; gate tile action={action}; passable={Game1.currentLocation.isTilePassable(new xTile.Dimensions.Location(14, 21), Game1.viewport)}");
+                bool ok = Game1.currentLocation.checkAction(new xTile.Dimensions.Location(14, 21), Game1.viewport, Game1.player);
+                Log.Info($"[gatecheck] clicked gate: {ok}; menu={Game1.activeClickableMenu?.GetType().Name ?? "none"}; question={(Game1.activeClickableMenu as DialogueBox)?.getCurrentString() ?? "-"}");
+                gateStage = 2;
+                return true;
+            case 2:
+                if (++gateWait < 60)
+                    return true;
+                Log.Info($"[gatecheck] ready for screenshot (fade {Game1.fadeToBlackAlpha}, globalFade {Game1.globalFade})");
+                try
+                {
+                    // Render one frame of the bus stop around the gate into a texture and save it (no SkiaSharp needed).
+                    var gd = Game1.graphics.GraphicsDevice;
+                    var rt = new Microsoft.Xna.Framework.Graphics.RenderTarget2D(gd, 1024, 640, false,
+                        Microsoft.Xna.Framework.Graphics.SurfaceFormat.Color, Microsoft.Xna.Framework.Graphics.DepthFormat.None, 0,
+                        Microsoft.Xna.Framework.Graphics.RenderTargetUsage.PreserveContents);
+                    var old = Game1.viewport;
+                    Game1.viewport = new xTile.Dimensions.Rectangle(14 * 64 - 512 + 32, 21 * 64 - 380, 1024, 640);
+                    AccessTools.Method(typeof(Game1), "_draw").Invoke(Game1.game1, new object[] { Game1.currentGameTime, rt });
+                    Game1.viewport = old;
+                    gd.SetRenderTarget(null);
+                    string path = Path.Combine(SV.StateDir, "gatecheck.png");
+                    using (var fs = File.Create(path))
+                        rt.SaveAsPng(fs, rt.Width, rt.Height);
+                    rt.Dispose();
+                    Log.Info($"[gatecheck] screenshot saved: {path}");
+                    (Game1.activeClickableMenu as DialogueBox)?.closeDialogue();
+                }
+                catch (Exception ex)
+                {
+                    Log.Info($"[gatecheck] screenshot failed: {ex.GetBaseException().Message}");
+                }
+                gateStage = 3;
+                return true;
+            default:
+                return true; // stand still by the gate
+        }
+    }
 
     /// <summary>Test: walk out of our own cabin through its real door warp, report where we land, then photograph the farm.</summary>
     private static bool DoorCheck(uint tick)

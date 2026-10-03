@@ -39,6 +39,11 @@ internal static class Farms
     /// <summary>Where you arrive on a farm from the bus stop road (same as vanilla).</summary>
     public static readonly Point RoadEntry = new(79, 17);
 
+    /// <summary>The visit-a-farm gate in the bus stop's farm-road fence.</summary>
+    private static readonly Point VisitGate = new(14, 21);
+    /// <summary>A fully transparent tile on the outdoors sheet: keeps the gate tile solid and clickable.</summary>
+    private const int BlankTile = 16;
+
     public static bool Enabled => SV.Config.Server.FarmCount > 0;
     /// <summary>Open farms. The server decides; players see the farms the server has sent them.</summary>
     public static IEnumerable<string> AllNames => SV.Role == Role.Server
@@ -84,6 +89,53 @@ internal static class Farms
                 prefix: new HarmonyMethod(typeof(Farms), nameof(PlaceItem_Prefix)));
             helper.Events.GameLoop.SaveLoaded += (_, _) => greeted = false;
             helper.Events.GameLoop.OneSecondUpdateTicked += Greet;
+            harmony.Patch(AccessTools.Method(typeof(GameLocation), nameof(GameLocation.draw), new[] { typeof(Microsoft.Xna.Framework.Graphics.SpriteBatch) }),
+                postfix: new HarmonyMethod(typeof(Farms), nameof(DrawVisitGate)));
+            harmony.Patch(AccessTools.Method(typeof(GameLocation), nameof(GameLocation.drawAboveAlwaysFrontLayer)),
+                postfix: new HarmonyMethod(typeof(Farms), nameof(DrawVisitBubble)));
+        }
+    }
+
+    private static Microsoft.Xna.Framework.Graphics.Texture2D? fenceTexture;
+
+    /// <summary>The bus stop gate (wood gate from the fence sheet) with a bobbing house bubble over it, like the mail bubble.</summary>
+    private static void DrawVisitGate(GameLocation __instance, Microsoft.Xna.Framework.Graphics.SpriteBatch b)
+    {
+        if (__instance is not BusStop)
+            return;
+        try
+        {
+            fenceTexture ??= Game1.content.Load<Microsoft.Xna.Framework.Graphics.Texture2D>("LooseSprites\\Fence1");
+            int x = VisitGate.X, y = VisitGate.Y;
+            // Closed wood gate (vanilla gate plank), twice: one plank on each fence rail so it reads as a solid gate.
+            foreach (int lift in new[] { 0, 36 })
+                b.Draw(fenceTexture, Game1.GlobalToLocal(Game1.viewport, new Vector2(x * 64 - 16, y * 64 - 64 - lift)), new Microsoft.Xna.Framework.Rectangle(0, 128, 24, 32),
+                    Color.White, 0f, Vector2.Zero, 4f, Microsoft.Xna.Framework.Graphics.SpriteEffects.None, (y * 64 + 33) / 10000f);
+        }
+        catch
+        {
+            // Drawing must never break the game.
+        }
+    }
+
+    /// <summary>Bobbing house bubble over the gate (above tree leaves; same bubble and motion as "you've got mail").</summary>
+    private static void DrawVisitBubble(GameLocation __instance, Microsoft.Xna.Framework.Graphics.SpriteBatch b)
+    {
+        if (__instance is not BusStop)
+            return;
+        try
+        {
+            int x = VisitGate.X, y = VisitGate.Y;
+            float bob = 4f * (float)Math.Round(Math.Sin(Game1.currentGameTime.TotalGameTime.TotalMilliseconds / 250.0), 2);
+            Vector2 bubble = new(x * 64 - 8, y * 64 - 200 + bob);
+            b.Draw(Game1.mouseCursors, Game1.GlobalToLocal(Game1.viewport, bubble), new Microsoft.Xna.Framework.Rectangle(141, 465, 20, 24),
+                Color.White * 0.9f, 0f, Vector2.Zero, 4f, Microsoft.Xna.Framework.Graphics.SpriteEffects.None, 0.99f);
+            b.Draw(Game1.mouseCursors, Game1.GlobalToLocal(Game1.viewport, bubble + new Vector2(12, 8)), new Microsoft.Xna.Framework.Rectangle(448, 64, 32, 36),
+                Color.White, 0f, Vector2.Zero, 1.75f, Microsoft.Xna.Framework.Graphics.SpriteEffects.None, 0.991f);
+        }
+        catch
+        {
+            // Drawing must never break the game.
         }
     }
 
@@ -118,22 +170,21 @@ internal static class Farms
         }
         else if (e.NameWithoutLocale.IsEquivalentTo("Maps/BusStop"))
         {
-            // A signpost by the farm road (same post as the vanilla one further along) opens "visit a farm".
-            // The fence there does too, as before.
+            // A gate in the farm-road fence, just right of where the fences meet, opens "visit a farm".
+            // The rest of that fence does too. The gate itself is drawn by DrawVisitGate (map tile left blank, still solid).
             e.Edit(asset =>
             {
                 var map = asset.AsMap().Data;
                 var layer = map.GetLayer("Buildings");
-                for (int x = 9; x <= 13; x++)
+                for (int x = 9; x <= 15; x++)
                     if (layer.Tiles[x, 21] is { } t)
                         t.Properties["Action"] = "SV_Visit";
                 var sheet = map.GetTileSheet("outdoors");
-                if (sheet != null && layer.Tiles[11, 22] == null && map.GetLayer("Front") is { } front)
+                if (sheet != null)
                 {
-                    var post = new xTile.Tiles.StaticTile(layer, sheet, xTile.Tiles.BlendMode.Alpha, 435);
-                    post.Properties["Action"] = "SV_Visit";
-                    layer.Tiles[11, 22] = post;
-                    front.Tiles[11, 21] = new xTile.Tiles.StaticTile(front, sheet, xTile.Tiles.BlendMode.Alpha, 410);
+                    var blank = new xTile.Tiles.StaticTile(layer, sheet, xTile.Tiles.BlendMode.Alpha, BlankTile);
+                    blank.Properties["Action"] = "SV_Visit";
+                    layer.Tiles[VisitGate.X, VisitGate.Y] = blank;
                 }
             }, AssetEditPriority.Late);
         }
@@ -298,7 +349,7 @@ internal static class Farms
             return;
         var mates = MembersOf(home).Where(f => f.UniqueMultiplayerID != Game1.player.UniqueMultiplayerID).Select(f => f.Name).ToList();
         Game1.chatBox.addInfoMessage($"You live on {DisplayName(home)}" + (mates.Count > 0 ? $" with {string.Join(", ", mates)}." : "."));
-        Game1.chatBox.addInfoMessage("To visit other farms, check the signpost by the farm road at the bus stop.");
+        Game1.chatBox.addInfoMessage("To visit other farms, use the gate with the house bubble by the farm road at the bus stop.");
     }
 
     // ---------- look, don't touch ----------

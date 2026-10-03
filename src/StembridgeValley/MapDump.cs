@@ -11,6 +11,17 @@ internal static class MapDump
         string? want = Environment.GetEnvironmentVariable("SV_DUMP_MAP");
         if (string.IsNullOrEmpty(want))
             return;
+        foreach (string asset in (Environment.GetEnvironmentVariable("SV_DUMP_ASSETS") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+            try
+            {
+                var t = Game1.content.Load<Microsoft.Xna.Framework.Graphics.Texture2D>(asset);
+                using var af = File.Create(Path.Combine(SV.StateDir, "asset-" + asset.Replace('\\', '_').Replace('/', '_') + ".png"));
+                t.SaveAsPng(af, t.Width, t.Height);
+            }
+            catch (Exception ex)
+            {
+                Log.Info($"[mapdump] couldn't export {asset}: {ex.Message}");
+            }
         try
         {
             Log.Info($"[mapdump] BusStop.1 = {Game1.content.LoadString("Strings\\Locations:BusStop.1")}");
