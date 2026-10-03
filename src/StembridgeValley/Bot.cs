@@ -285,7 +285,7 @@ internal static class Bot
                     Game1.player.experiencePoints[Skills.Mining] = Skills.XpForLevel(9);
                 Log.Info($"[quarry] at {here.Name}, home {home}; Mining {Skills.Level(Game1.player, Skills.Mining)}; going to the farm's left edge");
                 if (home != null)
-                    Game1.warpFarmer(home, 6, 45, 3);
+                    Game1.warpFarmer(home, 12, 45, 3);
                 break;
             case 2:
                 Log.Info($"[quarry] at {here.Name} {Game1.player.TilePoint}; left-edge path walkable: {string.Join(" ", Enumerable.Range(0, 4).Select(x => $"{x},45={(Walk(x, 45) ? "ok" : "X")}"))}; exits: {string.Join(" ", here.warps.Where(w => w.X < 0).Select(w => $"{w.X},{w.Y}->{w.TargetName} {w.TargetX},{w.TargetY}"))}; farm says best Mining {(home != null ? Quarry.PublishedLevel(home) : -1)}");

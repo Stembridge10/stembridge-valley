@@ -317,6 +317,9 @@ internal static class Quarry
     /// <summary>The farm's side of the opening: the farm's starting debris (stumps, rocks, weeds) lands there too.</summary>
     public static readonly XRect FarmWay = new(0, FarmExitRows[0] - 1, 8, FarmExitRows.Length + 2);
 
+    /// <summary>A walkable lane from the open farm to the opening, kept free of wild trees and boulders too.</summary>
+    public static readonly XRect FarmLane = new(0, FarmExitRows[0], 16, FarmExitRows.Length);
+
     /// <summary>Remove natural debris only (stumps, boulders, logs, weeds, stones, twigs, grass), never anything a player placed.</summary>
     private static void ClearDebris(GameLocation loc, XRect area)
     {
@@ -332,10 +335,14 @@ internal static class Quarry
                 var tile = new Vector2(x, y);
                 if (loc.objects.TryGetValue(tile, out SObject? o) && (o.IsWeeds() || o.IsBreakableStone() || o.IsTwig()))
                     loc.objects.Remove(tile);
-                if (loc.terrainFeatures.TryGetValue(tile, out var tf) && tf is StardewValley.TerrainFeatures.Grass)
+                if (loc.terrainFeatures.TryGetValue(tile, out var tf) && (tf is StardewValley.TerrainFeatures.Grass
+                    // wild trees from the farm's starting debris, on the lane only (never fruit trees, tapped or fertilized ones)
+                    || (tf is StardewValley.TerrainFeatures.Tree t && FarmLane.Contains(x, y) && IsFarmSide(loc) && !t.tapped.Value && !t.fertilized.Value)))
                     loc.terrainFeatures.Remove(tile);
             }
     }
+
+    private static bool IsFarmSide(GameLocation loc) => Farms.IsFarm(loc);
 
     private static void OnOneSecond(object? sender, OneSecondUpdateTickedEventArgs e)
     {
@@ -351,7 +358,10 @@ internal static class Quarry
     {
         foreach (string farm in Farms.AllNames)
             if (Game1.getLocationFromName(farm) is { } f)
+            {
                 ClearDebris(f, FarmWay);
+                ClearDebris(f, FarmLane);
+            }
     }
 
     private static void OnDayStarted(object? sender, DayStartedEventArgs e)
