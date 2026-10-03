@@ -159,6 +159,7 @@ internal static class Server
     {
         if (!Game1.IsServer)
             return;
+        MapDump.Run();
         SetDedicatedHost(true);
         Game1.options.ipConnectionsEnabled = true;
         Game1.options.enableFarmhandCreation = true;

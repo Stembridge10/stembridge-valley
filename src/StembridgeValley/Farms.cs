@@ -118,7 +118,8 @@ internal static class Farms
         }
         else if (e.NameWithoutLocale.IsEquivalentTo("Maps/BusStop"))
         {
-            // The fence along the north side of the farm road becomes "visit a farm".
+            // A signpost by the farm road (same post as the vanilla one further along) opens "visit a farm".
+            // The fence there does too, as before.
             e.Edit(asset =>
             {
                 var map = asset.AsMap().Data;
@@ -126,6 +127,14 @@ internal static class Farms
                 for (int x = 9; x <= 13; x++)
                     if (layer.Tiles[x, 21] is { } t)
                         t.Properties["Action"] = "SV_Visit";
+                var sheet = map.GetTileSheet("outdoors");
+                if (sheet != null && layer.Tiles[11, 22] == null && map.GetLayer("Front") is { } front)
+                {
+                    var post = new xTile.Tiles.StaticTile(layer, sheet, xTile.Tiles.BlendMode.Alpha, 435);
+                    post.Properties["Action"] = "SV_Visit";
+                    layer.Tiles[11, 22] = post;
+                    front.Tiles[11, 21] = new xTile.Tiles.StaticTile(front, sheet, xTile.Tiles.BlendMode.Alpha, 410);
+                }
             }, AssetEditPriority.Late);
         }
     }
@@ -289,7 +298,7 @@ internal static class Farms
             return;
         var mates = MembersOf(home).Where(f => f.UniqueMultiplayerID != Game1.player.UniqueMultiplayerID).Select(f => f.Name).ToList();
         Game1.chatBox.addInfoMessage($"You live on {DisplayName(home)}" + (mates.Count > 0 ? $" with {string.Join(", ", mates)}." : "."));
-        Game1.chatBox.addInfoMessage("To visit other farms, check the fence by the farm road at the bus stop.");
+        Game1.chatBox.addInfoMessage("To visit other farms, check the signpost by the farm road at the bus stop.");
     }
 
     // ---------- look, don't touch ----------
