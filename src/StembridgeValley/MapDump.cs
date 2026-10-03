@@ -54,10 +54,25 @@ internal static class MapDump
         foreach (string name in want.Split(','))
         {
             GameLocation? loc = Game1.getLocationFromName(name.Trim());
-            if (loc?.map == null)
+            xTile.Map? rawMap = null;
+            if (name.Trim().StartsWith("Maps"))
+                try { rawMap = Game1.content.Load<xTile.Map>(name.Trim()); } catch (Exception ex) { Log.Info($"[mapdump] {name}: {ex.Message}"); }
+            if (loc?.map == null && rawMap == null)
                 continue;
-            var map = loc.map;
+            var map = rawMap ?? loc!.map;
+            if (rawMap != null)
+                foreach (var sheet in map.TileSheets)
+                    try
+                    {
+                        var t = Game1.content.Load<Microsoft.Xna.Framework.Graphics.Texture2D>(sheet.ImageSource);
+                        using var sf = File.Create(Path.Combine(SV.StateDir, $"sheet-{sheet.Id}.png"));
+                        t.SaveAsPng(sf, t.Width, t.Height);
+                    }
+                    catch { }
+            Log.Info($"[mapdump] {name} props: {string.Join(" | ", map.Properties.Select(p => p.Key + "=" + p.Value))}");
             Log.Info($"[mapdump] {name} {map.Layers[0].LayerWidth}x{map.Layers[0].LayerHeight} sheets: {string.Join(" ", map.TileSheets.Select(t => t.Id + "=" + t.ImageSource))}");
+            bool all = (Environment.GetEnvironmentVariable("SV_DUMP_ALL") ?? "").Split(',').Contains(name.Trim());
+            using var full = all ? new StreamWriter(Path.Combine(SV.StateDir, $"mapdump-{name.Trim().Replace('\\', '_').Replace('/', '_')}.txt")) : null;
             foreach (var layer in map.Layers)
                 for (int y = 0; y < layer.LayerHeight; y++)
                     for (int x = 0; x < layer.LayerWidth; x++)
@@ -67,6 +82,11 @@ internal static class MapDump
                             continue;
                         string props = string.Join(";", t.Properties.Select(p => p.Key + "=" + p.Value)
                             .Concat(t.TileIndexProperties.Select(p => "i:" + p.Key + "=" + p.Value)));
+                        if (full != null)
+                        {
+                            full.WriteLine($"{layer.Id} {x},{y} {t.TileSheet.Id}#{t.TileIndex} {props}");
+                            continue;
+                        }
                         bool interesting = props.Contains("Action") || props.Contains("Message") || (name == "BusStop" && x <= 34 && y >= 10 && y <= 29);
                         if (interesting)
                             Log.Info($"[mapdump] {name} {layer.Id} {x},{y} {t.TileSheet.Id}#{t.TileIndex} {props}");

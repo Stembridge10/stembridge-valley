@@ -59,6 +59,8 @@ internal static class Bot
             return;
         if (Environment.GetEnvironmentVariable("SV_BOT_SETTINGS") is { Length: > 0 } role && SettingsCheck(role))
             return;
+        if (Environment.GetEnvironmentVariable("SV_BOT_QUARRY") == "1" && QuarryCheck())
+            return;
 
         nextActionTick = (int)e.Ticks + rng.Next(180, 480); // every 3-8 seconds
         actions++;
@@ -206,6 +208,124 @@ internal static class Bot
             default:
                 return true; // stand still by the gate
         }
+    }
+
+    /// <summary>Render the current location around a tile into a PNG in the state folder (test screenshots).</summary>
+    internal static void Snapshot(string file, int tileX, int tileY, int width = 1280, int height = 800)
+    {
+        try
+        {
+            var gd = Game1.graphics.GraphicsDevice;
+            var rt = new Microsoft.Xna.Framework.Graphics.RenderTarget2D(gd, width, height, false,
+                Microsoft.Xna.Framework.Graphics.SurfaceFormat.Color, Microsoft.Xna.Framework.Graphics.DepthFormat.None, 0,
+                Microsoft.Xna.Framework.Graphics.RenderTargetUsage.PreserveContents);
+            var old = Game1.viewport;
+            Game1.viewport = new xTile.Dimensions.Rectangle(tileX * 64 + 32 - width / 2, tileY * 64 + 32 - height / 2, width, height);
+            AccessTools.Method(typeof(Game1), "_draw").Invoke(Game1.game1, new object[] { Game1.currentGameTime, rt });
+            Game1.viewport = old;
+            gd.SetRenderTarget(null);
+            string path = Path.Combine(SV.StateDir, file);
+            using (var fs = File.Create(path))
+                rt.SaveAsPng(fs, rt.Width, rt.Height);
+            rt.Dispose();
+            Log.Info($"[snapshot] saved {path}");
+        }
+        catch (Exception ex)
+        {
+            Log.Info($"[snapshot] failed: {ex.GetBaseException().Message}");
+        }
+    }
+
+    private static int quarryStage, quarryWait;
+
+    /// <summary>
+    /// Test of the bigger farm and the quarry (SV_BOT_QUARRY=1; one step every ~3 seconds):
+    /// go home, check the new map size and exits, photograph the bridge and the quarry, level Mining to 15
+    /// (as if earned), and report the rocks the server puts in the quarry.
+    /// </summary>
+    private static bool QuarryCheck()
+    {
+        if (Game1.activeClickableMenu != null && Game1.activeClickableMenu is not DialogueBox)
+        {
+            Game1.activeClickableMenu.exitThisMenu(false);
+            return true;
+        }
+        if (Game1.locationRequest != null || ++quarryWait < 180)
+            return true;
+        quarryWait = 0;
+        quarryStage++;
+        string? home = Farms.HomeFarmOf(Game1.player);
+        GameLocation? farm = home != null ? Game1.getLocationFromName(home) : null;
+        string where = Game1.currentLocation?.Name ?? "-";
+        switch (quarryStage)
+        {
+            case 1:
+                Log.Info($"[quarry] at {where}, home {home}; going to the bridge");
+                if (home != null)
+                    Game1.warpFarmer(home, Quarry.Bridge.X, Quarry.Bridge.Y - 3, 2);
+                break;
+            case 3:
+            {
+                var map = Game1.currentLocation!.map;
+                string warps = Game1.currentLocation.TryGetMapProperty("Warp", out string? w) ? w : "-";
+                Log.Info($"[quarry] at {where} {Game1.player.TilePoint}; map {map.Layers[0].LayerWidth}x{map.Layers[0].LayerHeight}; warps: {warps}");
+                Log.Info($"[quarry] south exits: {string.Join(" ", Game1.currentLocation.warps.Where(x => x.Y >= Quarry.NewHeight - 1).Select(x => $"{x.X},{x.Y}->{x.TargetName} {x.TargetX},{x.TargetY}"))}");
+                bool Walk(int x, int y) => !Game1.currentLocation!.isCollidingPosition(new Microsoft.Xna.Framework.Rectangle(x * 64 + 16, y * 64 + 16, 32, 32), Game1.viewport, true, 0, false, Game1.player);
+                bool bridge = Walk(Quarry.Bridge.X, Quarry.Bridge.Y) && Walk(Quarry.Bridge.X, Quarry.Bridge.Y + 1) && Walk(Quarry.Bridge.X, Quarry.Bridge.Y + 2) && Walk(Quarry.Bridge.X, Quarry.Bridge.Y + 3);
+                bool river = Walk(Quarry.Bridge.X - 1, Quarry.Bridge.Y) || Walk(Quarry.Bridge.X - 3, Quarry.Bridge.Y) || Walk(Quarry.Bridge.X + 2, Quarry.Bridge.Y + 3);
+                bool seam = Walk(40, 61);
+                Log.Info($"[quarry] walkable: bridge {bridge}, river next to it {river}, old tree line at 40,61 {seam}");
+                foreach (var (tx, ty) in new[] { (Quarry.Bridge.X, Quarry.Bridge.Y), (Quarry.Bridge.X, Quarry.Bridge.Y + 1), (Quarry.Bridge.X, Quarry.Bridge.Y + 3), (Quarry.Bridge.X - 3, Quarry.Bridge.Y + 1) })
+                    foreach (string ln in new[] { "Back", "Buildings" })
+                    {
+                        var t = map.GetLayer(ln)?.Tiles[tx, ty];
+                        Log.Info($"[quarry] tile {ln} {tx},{ty}: {(t == null ? "none" : $"{t.TileSheet.Id}#{t.TileIndex} idx[{string.Join(",", t.TileIndexProperties.Select(p => p.Key + "=" + p.Value))}] own[{string.Join(",", t.Properties.Select(p => p.Key + "=" + p.Value))}]")}");
+                    }
+                Log.Info($"[quarry] column {Quarry.Bridge.X} rows {Quarry.Bridge.Y - 3}..{Quarry.Bridge.Y + 8}: " + string.Join(" ", Enumerable.Range(Quarry.Bridge.Y - 3, 12).Select(ry =>
+                {
+                    var v = new Microsoft.Xna.Framework.Vector2(Quarry.Bridge.X, ry);
+                    string what = Game1.currentLocation.objects.TryGetValue(v, out var o) ? "obj:" + o.Name : Game1.currentLocation.terrainFeatures.TryGetValue(v, out var tf) ? "tf:" + tf.GetType().Name : "";
+                    return $"{ry}={(Walk(Quarry.Bridge.X, ry) ? "ok" : "X")}{what}";
+                })));
+                foreach (var c in Game1.currentLocation.resourceClumps.Where(c => c.Tile.Y >= Quarry.Bridge.Y - 2 && c.Tile.Y <= Quarry.Bridge.Y + 10 && Math.Abs(c.Tile.X - Quarry.Bridge.X) <= 4))
+                    Log.Info($"[quarry] clump {c.parentSheetIndex.Value} at {c.Tile} size {c.width.Value}x{c.height.Value}");
+                foreach (var lf in Game1.currentLocation.largeTerrainFeatures.Where(f => Math.Abs(f.Tile.X - Quarry.Bridge.X) <= 4 && f.Tile.Y >= Quarry.Bridge.Y && f.Tile.Y <= Quarry.Bridge.Y + 8))
+                    Log.Info($"[quarry] large feature {lf.GetType().Name} at {lf.Tile}");
+                foreach (string ln in new[] { "Back", "Buildings", "Front" })
+                    foreach (int ry in new[] { Quarry.Bridge.Y + 4, Quarry.Bridge.Y + 5 })
+                    {
+                        var t = map.GetLayer(ln)?.Tiles[Quarry.Bridge.X, ry];
+                        Log.Info($"[quarry] tile {ln} {Quarry.Bridge.X},{ry}: {(t == null ? "none" : $"{t.TileSheet.Id}#{t.TileIndex} idx[{string.Join(",", t.TileIndexProperties.Select(p => p.Key + "=" + p.Value))}]")}");
+                    }
+                // Walk across for real: path-find from the old farm to the far side of the bridge.
+                var toSteps = new PathFindController(Game1.player, Game1.currentLocation, Quarry.Steps, 0);
+                Log.Info($"[quarry] path from the old farm to the quarry stairs: {(toSteps.pathToEndPoint == null ? "none" : toSteps.pathToEndPoint.Count + " steps")}");
+                var walk = new PathFindController(Game1.player, Game1.currentLocation, new Point(Quarry.Bridge.X, Quarry.Bridge.Y + 6), 2);
+                Log.Info($"[quarry] path across the bridge: {(walk.pathToEndPoint == null ? "none" : walk.pathToEndPoint.Count + " steps")}");
+                if (walk.pathToEndPoint != null)
+                    Game1.player.controller = walk;
+                break;
+            }
+            case 4:
+                Log.Info($"[quarry] after the walk: now at {Game1.player.TilePoint} (crossed = row > {Quarry.Bridge.Y + 3})");
+                Snapshot("quarry-bridge.png", Quarry.Bridge.X, Quarry.Bridge.Y + 1);
+                Log.Info($"[quarry] Mining {Skills.Level(Game1.player, Skills.Mining)}, rocks in quarry {(farm != null ? Quarry.RocksIn(farm) : -1)}");
+                Game1.warpFarmer(home!, Quarry.Steps.X, Quarry.Steps.Y, 0);
+                break;
+            case 6:
+                Log.Info($"[quarry] at {where} {Game1.player.TilePoint}; stairs walkable {Game1.currentLocation!.isTilePassable(new xTile.Dimensions.Location(Quarry.Steps.X, Quarry.Steps.Y - 2), Game1.viewport)}");
+                Snapshot("quarry-before.png", Quarry.Area.Center.X, Quarry.Area.Center.Y + 2);
+                // Earn Mining 15 (test shortcut: same call the game makes when you break a rock).
+                Game1.player.gainExperience(Skills.Mining, Skills.XpForLevel(15) - Skills.Xp(Game1.player, Skills.Mining));
+                Log.Info($"[quarry] Mining now {Skills.Level(Game1.player, Skills.Mining)} ({Skills.Xp(Game1.player, Skills.Mining)} XP)");
+                Log.Info($"[quarry] skills page: {Skills.Describe(Game1.player, Skills.Mining).Replace(Environment.NewLine, " / ")}");
+                break;
+            case 10:
+                Log.Info($"[quarry] rocks in quarry now {(farm != null ? Quarry.RocksIn(farm) : -1)}: {string.Join(" ", farm?.objects.Pairs.Where(p => Quarry.Area.Contains((int)p.Key.X, (int)p.Key.Y)).Select(p => p.Value.ItemId) ?? Array.Empty<string>())}");
+                Snapshot("quarry-after.png", Quarry.Area.Center.X, Quarry.Area.Center.Y + 2);
+                break;
+        }
+        return true;
     }
 
     /// <summary>Test: walk out of our own cabin through its real door warp, report where we land, then photograph the farm.</summary>
