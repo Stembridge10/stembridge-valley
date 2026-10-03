@@ -48,6 +48,9 @@ internal static class Farms
         ? Enumerable.Range(1, serverOpen).Select(LocationName)
         : Game1.locations.Where(l => IsFarm(l) && l.isAlwaysActive.Value).Select(l => l.Name).ToList();
     public static int Count => AllNames.Count();
+    /// <summary>Farms that get a location entry: the open ones on the server, every possible one on players' games.</summary>
+    public static IEnumerable<string> DataNames() =>
+        Enumerable.Range(1, SV.Role == Role.Server ? serverOpen : MaxFarms).Select(LocationName);
     public static string LocationName(int i) => Prefix + i;
     /// <summary>The farm's name: the one its owner chose, else its starting tree name ("Cedar Farm").</summary>
     public static string DisplayName(string locationName) =>
@@ -130,10 +133,8 @@ internal static class Farms
                 // The server creates the farms that are open. Players get a cheap stand-in for every possible farm,
                 // which the real farm from the server replaces when it arrives (also for farms opened later).
                 bool server = SV.Role == Role.Server;
-                int n = server ? serverOpen : MaxFarms;
-                for (int i = 1; i <= n; i++)
+                foreach (string name in DataNames())
                 {
-                    string name = LocationName(i);
                     // Same fish, forage and artifact spots as the normal farm.
                     var entry = standard != null ? (LocationData)clone.Invoke(standard, null)! : new LocationData();
                     entry.DisplayName = DefaultName(name);
@@ -193,12 +194,16 @@ internal static class Farms
         farm.AddDefaultBuildings();
         Server.BuildCabin(farm, 0); // one cabin; another is added beside it for each invited friend
         farm.modData["SV.CabinsInRow"] = "1";
+        GameLocation hills = Quarry.EnsureHills(name);
         FarmRoster.Load(); // gives it an invite code
         Server.SetPlayerLimit();
         var send = AccessTools.Method(typeof(GameServer), "sendLocation");
         if (Game1.server is GameServer gs)
             foreach (long peer in Game1.otherFarmers.Keys.ToList())
+            {
                 send.Invoke(gs, new object[] { peer, farm, false });
+                send.Invoke(gs, new object[] { peer, hills, false });
+            }
         Log.Info($"Opened {DisplayName(name)}: {serverOpen} farms now.");
         return name;
     }
@@ -212,6 +217,8 @@ internal static class Farms
         {
             if (IsFarm(loc) || loc is Farm)
                 return loc;
+            if (Quarry.IsHills(loc))
+                return Game1.getLocationFromName(Quarry.FarmOfHills(loc.Name)); // a farm's Hills belong to it
             loc = loc.GetParentLocation();
         }
         return null;

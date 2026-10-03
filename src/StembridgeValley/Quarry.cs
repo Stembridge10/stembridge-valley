@@ -1,7 +1,9 @@
+using HarmonyLib;
 using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
+using StardewValley.GameData.Locations;
 using xTile;
 using xTile.Layers;
 using xTile.Tiles;
@@ -11,162 +13,151 @@ using SObject = StardewValley.Object;
 namespace StembridgeValley;
 
 /// <summary>
-/// Bigger farms and the farm quarry.
-///  - Every farm map gets a new southern area: the old bottom tree line opens up, and below it sits the lower half of
-///    Stardew's own Hill-top farm (a river with wooden bridges, a fenced quarry plateau with stairs, and a second
-///    plateau for later). The south exit to the forest moves down to the new bottom edge.
-///  - Mining 15 (best level among the farm's members) opens the quarry: rocks appear there every morning,
-///    more and better as Mining goes up (gold at 20, gems at 25, iridium at 35, mystic stones at 40, double at 45).
-/// Both the server and every player's game edit the map the same way, so it lines up for everyone.
+/// The Hills and the quarry.
+///  - Every farm has its own "Hills": the whole of Stardew's Hill-top farm map, reached by walking off the left side
+///    of the farm (a path opens through the farm's left bank). The Hills keep their own rivers, cliffs and bridges,
+///    so nothing is cut off. They belong to the farm: same owners, visitors look but don't touch, crops grow there.
+///  - Mining 15 (best level among the farm's members) opens the Hills quarry: rocks appear there every morning,
+///    more and better as Mining goes up (gold at 20, gems at 25, more at 30, iridium at 35, mystic stones at 40, double at 45).
 /// </summary>
 internal static class Quarry
 {
-    private const int OldHeight = 65;    // vanilla standard farm
-    private const int Cut = 62;          // standard rows 0-61 stay; the new area starts here
-    private const int SrcY = 28;         // Hill-top rows 28-64 are copied in
-    public const int NewHeight = Cut + (OldHeight - SrcY); // 99
-    private const int Shift = Cut - SrcY;                  // Hill-top row + 34 = farm row
+    public const string Prefix = "SV_Hills";
+    private const string HillsMap = "Maps\\Farm_Mining";
 
-    /// <summary>The quarry's dirt floor (Hill-top's fenced plateau, x 5-26, y 37-44, moved down).</summary>
-    public static readonly XRect Area = new(5, 37 + Shift, 22, 8);
+    /// <summary>Farm side: walking off the left edge on these rows goes to the Hills.</summary>
+    public static readonly int[] FarmExitRows = { 44, 45, 46 };
+    /// <summary>Where you arrive on the farm coming back.</summary>
+    public static readonly Point FarmArrival = new(1, 45);
+    /// <summary>Where you arrive in the Hills (just inside the Hill-top farm's road entrance on its right edge).</summary>
+    public static readonly Point HillsArrival = new(78, 17);
+
+    /// <summary>The quarry's dirt floor (the Hill-top farm's fenced plateau).</summary>
+    public static readonly XRect Area = new(5, 37, 22, 8);
     /// <summary>Just below the quarry stairs.</summary>
-    public static readonly Point Steps = new(16, 50 + Shift);
-    /// <summary>The first bridge over the river, where the old farm meets the new area.</summary>
-    public static readonly Point Bridge = new(31, 30 + Shift);
+    public static readonly Point Steps = new(16, 50);
+    /// <summary>The bridge on the way from the entrance to the quarry.</summary>
+    public static readonly Point Bridge = new(31, 30);
 
     public const int UnlockLevel = 15;
     private const int MaxRocks = 45;
 
-    private static IModHelper Helper = null!;
+    public static string HillsOf(string farmName) => Prefix + farmName.Substring(Farms.Prefix.Length);
+    public static string FarmOfHills(string hillsName) => Farms.Prefix + hillsName.Substring(Prefix.Length);
+    public static bool IsHills(GameLocation? loc) => loc != null && loc.Name.StartsWith(Prefix, StringComparison.Ordinal);
 
-    public static void Apply(IModHelper helper)
+    public static void Apply(IModHelper helper, Harmony harmony)
     {
-        Helper = helper;
+        if (!Farms.Enabled)
+            return;
         helper.Events.Content.AssetRequested += OnAssetRequested;
+        harmony.Patch(AccessTools.Method(typeof(GameLocation), nameof(GameLocation.updateWarps)),
+            postfix: new HarmonyMethod(typeof(Quarry), nameof(UpdateWarps_Postfix)));
         if (SV.Role == Role.Server)
         {
             helper.Events.GameLoop.DayStarted += OnDayStarted;
+            helper.Events.GameLoop.SaveLoaded += (_, _) => ClearAllWays();
             helper.Events.GameLoop.OneSecondUpdateTicked += OnOneSecond;
             Skills.LevelUp += OnLevelUp;
         }
     }
 
-    // ---------- the map ----------
+    // ---------- locations and maps ----------
 
     private static void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
     {
-        if (e.NameWithoutLocale.IsEquivalentTo("Maps/Farm"))
-            e.Edit(asset => Extend(asset.AsMap()), AssetEditPriority.Early);
-        else if (e.NameWithoutLocale.IsEquivalentTo("Maps/Forest"))
+        if (e.NameWithoutLocale.IsEquivalentTo("Data/Locations"))
             e.Edit(asset =>
             {
-                // The forest's path north lands at the farm's (new) bottom edge.
-                var map = asset.AsMap().Data;
-                if (map.Properties.TryGetValue("Warp", out var warp))
-                    map.Properties["Warp"] = RewriteWarps(warp.ToString(), (target, fromY, toY) =>
-                        (fromY, target == "Farm" && toY >= OldHeight - 5 && toY < OldHeight ? toY + (NewHeight - OldHeight) : toY));
-            });
+                var data = asset.AsDictionary<string, LocationData>().Data;
+                data.TryGetValue("Farm_Hilltop", out var hilltop);
+                var clone = AccessTools.Method(typeof(object), "MemberwiseClone");
+                bool server = SV.Role == Role.Server;
+                foreach (string farm in Farms.DataNames())
+                {
+                    // Hill-top farm's fish, forage and artifact spots; crops can be planted like on a farm.
+                    var entry = hilltop != null ? (LocationData)clone.Invoke(hilltop, null)! : new LocationData();
+                    entry.DisplayName = "Hills";
+                    entry.CanPlantHere = true;
+                    entry.DefaultArrivalTile = HillsArrival;
+                    entry.CreateOnLoad = server
+                        ? new CreateLocationData { MapPath = HillsMap, AlwaysActive = true }
+                        : new CreateLocationData { MapPath = "Maps\\Cellar", AlwaysActive = false };
+                    data[HillsOf(farm)] = entry;
+                }
+            }, AssetEditPriority.Late);
+        else if (e.NameWithoutLocale.IsEquivalentTo("Maps/Farm"))
+            e.Edit(asset => OpenLeftEdge(asset.AsMap().Data));
     }
 
-    private static void Extend(IAssetDataForMap asset)
+    /// <summary>
+    /// A path off the farm's left side (rows 44-46). The left bank above it ends in a short cliff and the one below
+    /// starts with a grass lip: the same pieces the farm map uses for its own banks.
+    /// </summary>
+    private static void OpenLeftEdge(Map map)
     {
-        Map map = asset.Data;
-        if (map.Layers[0].LayerHeight != OldHeight)
-            return;
-        Map hill = Helper.GameContent.Load<Map>("Maps/Farm_Mining");
-
-        asset.ExtendMap(minHeight: NewHeight);
-        // Open the old bottom tree line (and the bush/tree bits that hung over it) so you can walk south.
-        TileSheet? ground = map.TileSheets.FirstOrDefault(t => t.Id == "untitled tile sheet");
-        Clear(map, ground, 3, 58, 68, 61);
-        Clear(map, ground, 66, 58, 70, 59);
-        Clear(map, ground, 69, 60, 76, 61);
-        // The new area.
-        asset.PatchMap(hill, new XRect(0, SrcY, 80, OldHeight - SrcY), new XRect(0, Cut, 80, OldHeight - SrcY), PatchMapMode.Replace);
-        // Tile-sheet tags (bridge planks are walkable, water is water) differ between the two maps even though the
-        // art is shared: the farm tags some river tiles as walls. Point the new area at its own copy of the Hill-top
-        // sheet so every tile keeps exactly the behaviour it has on the Hill-top farm.
-        RebindToHillSheet(hill, map);
-        // The south exit moves to the new bottom edge.
-        if (map.Properties.TryGetValue("Warp", out var warp))
-            map.Properties["Warp"] = RewriteWarps(warp.ToString(), (target, fromY, toY) => (fromY == OldHeight ? NewHeight : fromY, toY));
-    }
-
-    private const string HillSheetId = "zz_sv_hilltop";
-
-    private static void RebindToHillSheet(Map hill, Map map)
-    {
-        TileSheet? src = hill.TileSheets.FirstOrDefault(t => t.Id == "untitled tile sheet");
-        if (src == null)
+        TileSheet? s = map.TileSheets.FirstOrDefault(t => t.Id == "untitled tile sheet");
+        Layer? back = map.GetLayer("Back"), buildings = map.GetLayer("Buildings"), front = map.GetLayer("Front");
+        if (s == null || back == null || buildings == null || front == null || back.LayerWidth < 10 || back.LayerHeight < 50)
         {
-            Log.Warn("Bigger farm: Hill-top tile sheet not found; the new area may not be walkable.");
+            Log.Warn("Hills: the farm map isn't the standard one; no path to the Hills.");
             return;
         }
-        var copy = new TileSheet(HillSheetId, map, src.ImageSource, src.SheetSize, src.TileSize);
-        foreach (var p in src.Properties)   // includes every per-tile tag (stored as @TileIndex@n@Key)
-            copy.Properties[p.Key] = p.Value;
-        map.AddTileSheet(copy);
+        void Set(Layer layer, int x, int y, int? index) =>
+            layer.Tiles[x, y] = index is int i ? new StaticTile(layer, s, BlendMode.Alpha, i) : null;
 
-        int moved = 0;
-        foreach (Layer from in hill.Layers)
+        for (int y = 42; y <= 47; y++)
+            for (int x = 0; x <= 2; x++)
+            {
+                Set(back, x, y, 587);
+                Set(buildings, x, y, null);
+                Set(front, x, y, null);
+            }
+        // Bottom of the upper bank: grass, then a short cliff face.
+        Set(back, 0, 41, 351); Set(back, 1, 41, 352); Set(back, 2, 41, 176);
+        Set(buildings, 0, 41, 16); Set(buildings, 1, 41, 16); Set(buildings, 2, 41, 444);
+        Set(buildings, 0, 42, 468); Set(buildings, 1, 42, 468); Set(buildings, 2, 42, 469);
+        Set(buildings, 0, 43, 493); Set(buildings, 1, 43, 493); Set(buildings, 2, 43, 494);
+        // Top of the lower bank: a grass lip, and the bank's edge carries on below it.
+        Set(front, 0, 47, 413); Set(front, 1, 47, 414); Set(front, 2, 47, 438);
+        Set(back, 2, 48, 175); Set(buildings, 2, 48, 394);
+    }
+
+    /// <summary>Server: the farm's left edge leads to its Hills; the Hills' road (to the bus stop in vanilla) leads back to the farm.</summary>
+    private static void UpdateWarps_Postfix(GameLocation __instance)
+    {
+        if (Game1.IsClient)
+            return;
+        if (Farms.IsFarm(__instance))
         {
-            Layer? to = map.GetLayer(from.Id);
-            if (to == null)
-                continue;
-            for (int y = SrcY; y < OldHeight; y++)
-                for (int x = 0; x < from.LayerWidth; x++)
-                {
-                    if (from.Tiles[x, y] is not { } s || s.TileSheet != src || to.Tiles[x, y + Shift] is not { } d)
-                        continue;
-                    to.Tiles[x, y + Shift] = Rebind(d, to, copy);
-                    moved++;
-                }
+            string hills = HillsOf(__instance.Name);
+            foreach (int y in FarmExitRows)
+                __instance.warps.Add(new Warp(-1, y, hills, HillsArrival.X, HillsArrival.Y, false));
         }
-        Log.Info($"Bigger farm: {moved} tiles use the Hill-top tile tags.");
-    }
-
-    private static Tile Rebind(Tile t, Layer layer, TileSheet sheet)
-    {
-        Tile n = t is AnimatedTile a
-            ? new AnimatedTile(layer, a.TileFrames.Select(f => (StaticTile)Rebind(f, layer, sheet)).ToArray(), a.FrameInterval)
-            : new StaticTile(layer, sheet, t.BlendMode, t.TileIndex);
-        foreach (var p in t.Properties)
-            n.Properties[p.Key] = p.Value;
-        return n;
-    }
-
-    /// <summary>Open dirt: nothing standing on it.</summary>
-    private static void Clear(Map map, TileSheet? ground, int x0, int y0, int x1, int y1)
-    {
-        foreach (Layer layer in map.Layers)
+        else if (IsHills(__instance))
         {
-            for (int x = x0; x <= x1; x++)
-                for (int y = y0; y <= y1; y++)
-                {
-                    if (layer.Id == "Back")
-                    {
-                        if (ground != null)
-                            layer.Tiles[x, y] = new StaticTile(layer, ground, BlendMode.Alpha, 587);
-                    }
-                    else
-                        layer.Tiles[x, y] = null;
-                }
+            string farm = FarmOfHills(__instance.Name);
+            for (int i = __instance.warps.Count - 1; i >= 0; i--)
+            {
+                Warp w = __instance.warps[i];
+                if (w.TargetName == "BusStop")
+                    __instance.warps[i] = new Warp(w.X, w.Y, farm, FarmArrival.X, FarmArrival.Y, false);
+                else if (w.TargetName is "FarmCave" or "Greenhouse" or "FarmHouse")
+                    __instance.warps.RemoveAt(i);
+            }
         }
     }
 
-    /// <summary>Map "Warp" property: groups of "fromX fromY target toX toY". <paramref name="change"/> gets (target, fromY, toY) and returns the new pair.</summary>
-    private static string RewriteWarps(string warps, Func<string, int, int, (int FromY, int ToY)> change)
+    /// <summary>Server: make the Hills for a farm (once). Returns it, not yet sent to players.</summary>
+    public static GameLocation EnsureHills(string farmName)
     {
-        string[] p = warps.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        for (int i = 0; i + 4 < p.Length; i += 5)
-        {
-            if (!int.TryParse(p[i + 1], out int fromY) || !int.TryParse(p[i + 4], out int toY))
-                continue;
-            var (newFrom, newTo) = change(p[i + 2], fromY, toY);
-            p[i + 1] = newFrom.ToString();
-            p[i + 4] = newTo.ToString();
-        }
-        return string.Join(' ', p);
+        string name = HillsOf(farmName);
+        if (Game1.getLocationFromName(name) is { } existing)
+            return existing;
+        GameLocation hills = Game1.CreateGameLocation(name);
+        Game1.locations.Add(hills);
+        ClearWay(hills);
+        return hills;
     }
 
     // ---------- the quarry ----------
@@ -176,36 +167,62 @@ internal static class Quarry
 
     private static int RocksPerDay(int level) => (level >= 30 ? 10 : 6) * (level >= 45 ? 2 : 1);
 
-    /// <summary>The walk from the bridge down to the quarry stairs. New farms copy in the Hill-top farm's stumps and
-    /// boulders, and one lands right where you step off the bridge; a new player can't break it yet, so keep this way clear.</summary>
+    /// <summary>The way across the first bridge. The Hill-top map puts a big stump right where you step off it, and a
+    /// new player can't break that yet, so keep it clear.</summary>
     public static readonly XRect Way = new(Bridge.X - 2, Bridge.Y - 2, 5, 12);
+    /// <summary>The farm's side of the left-edge opening: the farm's starting debris (stumps, rocks, weeds) lands
+    /// there too.</summary>
+    public static readonly XRect FarmWay = new(0, FarmExitRows[0] - 1, 8, FarmExitRows.Length + 2);
 
-    private static void ClearWay(GameLocation loc)
+    private static void ClearWay(GameLocation loc) => ClearDebris(loc, Way);
+
+    /// <summary>Remove natural debris only (stumps, boulders, logs, weeds, stones, twigs, grass), never anything a player placed.</summary>
+    private static void ClearDebris(GameLocation loc, XRect area)
     {
         for (int i = loc.resourceClumps.Count - 1; i >= 0; i--)
         {
             var c = loc.resourceClumps[i];
-            if (new XRect((int)c.Tile.X, (int)c.Tile.Y, c.width.Value, c.height.Value).Intersects(Way))
+            if (new XRect((int)c.Tile.X, (int)c.Tile.Y, c.width.Value, c.height.Value).Intersects(area))
                 loc.resourceClumps.RemoveAt(i);
         }
+        for (int x = area.Left; x < area.Right; x++)
+            for (int y = area.Top; y < area.Bottom; y++)
+            {
+                var tile = new Vector2(x, y);
+                if (loc.objects.TryGetValue(tile, out SObject? o) && (o.IsWeeds() || o.IsBreakableStone() || o.IsTwig()))
+                    loc.objects.Remove(tile);
+                if (loc.terrainFeatures.TryGetValue(tile, out var tf) && tf is StardewValley.TerrainFeatures.Grass)
+                    loc.terrainFeatures.Remove(tile);
+            }
     }
 
     private static void OnOneSecond(object? sender, OneSecondUpdateTickedEventArgs e)
     {
-        if (!Context.IsWorldReady)
-            return;
+        if (Context.IsWorldReady && e.IsMultipleOf(600))
+            ClearAllWays();
+    }
+
+    private static void ClearAllWays()
+    {
         foreach (string farm in Farms.AllNames)
-            if (Game1.getLocationFromName(farm) is { } loc && loc.Map.Layers[0].LayerHeight == NewHeight)
-                ClearWay(loc);
+        {
+            if (Game1.getLocationFromName(HillsOf(farm)) is { } hills)
+                ClearWay(hills);
+            if (Game1.getLocationFromName(farm) is { } f)
+                ClearDebris(f, FarmWay);
+        }
     }
 
     private static void OnDayStarted(object? sender, DayStartedEventArgs e)
     {
         foreach (string farm in Farms.AllNames)
         {
+            if (Game1.getLocationFromName(HillsOf(farm)) is not { } hills)
+                continue;
+            ClearWay(hills);
             int level = BestMiningLevel(farm);
-            if (level >= UnlockLevel && Game1.getLocationFromName(farm) is { } loc)
-                Spawn(loc, level, RocksPerDay(level));
+            if (level >= UnlockLevel)
+                Spawn(hills, level, RocksPerDay(level));
         }
     }
 
@@ -214,9 +231,9 @@ internal static class Quarry
     {
         if (skill != Skills.Mining || level < UnlockLevel || Skills.UnlockAt(skill, level) == null)
             return;
-        if (Farms.HomeFarmOf(who) is { } farm && Game1.getLocationFromName(farm) is { } loc)
+        if (Farms.HomeFarmOf(who) is { } farm && Game1.getLocationFromName(HillsOf(farm)) is { } hills)
         {
-            int placed = Spawn(loc, level, RocksPerDay(level));
+            int placed = Spawn(hills, level, RocksPerDay(level));
             Log.Info($"{who.Name} reached Mining {level}: {placed} rocks in {Farms.DisplayName(farm)}'s quarry.");
         }
     }
