@@ -23,6 +23,27 @@ Status: progression drafted; calendar, marriage and festival decisions made Oct 
   Something worthwhile about every 5 levels (farm quarry, bus pass, rare seeds, farm fishing spot, forest patch), skillcape at 50,
   Discord hiscores and milestone announcements. Vanilla level 5/10 professions stay.
 - First build: leveling system + Mining (farm quarry unlock).
+
+## Long-term features (owner approved Oct 3: "note all this down and keep going")
+Everything works solo, never runs out, and a late joiner chases the same things as a veteran. Rare/brag-worthy
+results are rolled and recorded by the server, never trusted from a player's game.
+- **Skills 11-50** (building first). Unlock tables per skill, examples:
+  Mining: farm quarry, then gem spots in it. Combat: bus pass to the desert, later better travel.
+  Farming: rare seeds, better giant-crop odds, special crop variants. Fishing: fishing spot on your farm, legendary fish rematch.
+  Foraging: forest patch on your farm, rare forage.
+- **Bundles** (owner idea): bundle sets players complete for unlocks and rewards, the Community Center way, but
+  personal or per farm so every player gets to do them (not one shared CC the first players finish forever).
+- **Skilling pets** (OSRS): very rare drop while skilling (rock golem while mining, baby fish while fishing). Follows you.
+- **Collection log** (OSRS): personal book of every fish, gem, artifact and rare drop found. Built from Stardew's own counters.
+- **Clue scrolls** (OSRS): rare drop starting a dig/step treasure hunt around the valley; reward box with hats, furniture, rare seeds.
+- **Area diaries** (OSRS): easy/medium/hard/elite task lists for Town, Beach, Mountain, Desert; each tier gives a perk there.
+- **Ironman mode** (OSRS): optional no-trade/no-help account.
+- **Raids with weekly lockout** (WoW): group Skull Cavern run with a boss; best loot once a week. (= co-op dungeons.)
+- **Faction reputation** (WoW): standing with Willy's fishermen, Marlon's adventurers, Robin's builders; ranks unlock recipes/gear.
+- **Titles, mounts, cosmetics** (WoW): "the Angler" titles, horse skins, outfit swaps.
+- **Auction house** (WoW): the player market.
+- Suggested order after skills: collection log, skilling pets, clue scrolls, area diaries, bundles; raids and the auction house later.
+- Known limit: Stardew keeps XP in each player's own game, so a cheater could edit it. Hiscores/pets need server-side sanity checks.
 - Idea list offered Oct 3 (owner likes WoW and OSRS), not yet approved: skilling pets, collection log, clue scrolls,
   area achievement diaries, raids with weekly lockout, villager factions, horse mounts/cosmetics, titles, ironman mode.
 
