@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Stembridge Valley Discord bot.
 
-/play                 -> privately sends the member their personal invite code (same code every time).
-/play friend:@someone -> same, and a brand-new player is placed on that friend's farm if it has room.
-/newcode              -> replaces your code (if you think someone else saw it).
+/play            -> privately sends the member their personal invite code (same code every time).
+                    A new player gets a farm of their own.
+/invite @friend  -> puts a friend (who hasn't made a farmer yet) on your farm, up to 4 people.
+/farm            -> who lives on your farm.
+/newcode         -> replaces your code (if you think someone else saw it).
 
 Writes the game server's discord-players.json:
-  {"tokens": {TOKEN: {"id": DISCORD_ID, "name": NAME, "friend": FRIEND_ID|null}}, "revoked": [DISCORD_ID, ...]}
+  {"tokens": {TOKEN: {"id": DISCORD_ID, "name": NAME, "friend": INVITER_ID|null}}, "revoked": [DISCORD_ID, ...]}
+and reads the server's farm-status.json ({FARM: {"name", "members": [{"key": "discord-ID", "started"}]}}).
 Banned members and members who left are listed as revoked; the game turns them away and kicks them if online.
 
 Config (environment):
@@ -27,6 +30,8 @@ log = logging.getLogger("svbot")
 
 STATE = Path(os.environ["SV_STATE_DIR"])
 ROSTER = STATE / "discord-players.json"
+FARMS = STATE / "farm-status.json"
+FARM_SIZE = 4
 ADDRESS = os.environ["SV_PUBLIC_ADDRESS"]
 GUILD_ID = int(os.environ.get("SV_GUILD_ID") or 0) or None
 # Only servers Stembridge owns count, so nobody can add the bot to their own server and hand out codes.
@@ -55,6 +60,30 @@ def save(data):
         json.dump(data, f, indent=2)
     os.chmod(tmp, 0o640)
     os.replace(tmp, ROSTER)  # atomic: the game never reads a half-written file
+
+
+def farms():
+    try:
+        return json.loads(FARMS.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def farm_of(uid, status=None):
+    """(farm id, farm entry, member entry) for a Discord ID, or (None, None, None)."""
+    for fid, f in (status if status is not None else farms()).items():
+        for m in f["members"]:
+            if m["key"] == f"discord-{uid}":
+                return fid, f, m
+    return None, None, None
+
+
+def name_of(data, key):
+    uid = key.removeprefix("discord-")
+    for p in data["tokens"].values():
+        if p["id"] == uid:
+            return p["name"]
+    return "someone"
 
 
 def token_for(data, uid):
@@ -93,20 +122,22 @@ HOW_TO = (
 )
 
 
-def ensure_player(member, friend=None, fresh=False):
+def ensure_player(member, invited_by=None, fresh=False):
     uid = str(member.id)
     data = load()
     tok = token_for(data, uid)
     if tok and fresh:
-        del data["tokens"][tok]
+        old = data["tokens"].pop(tok)
         tok = None
+    else:
+        old = None
     if not tok:
         tok = secrets.token_urlsafe(18)
-        data["tokens"][tok] = {"id": uid, "name": member.display_name, "friend": None}
+        data["tokens"][tok] = {"id": uid, "name": member.display_name, "friend": (old or {}).get("friend")}
     p = data["tokens"][tok]
     p["name"] = member.display_name
-    if friend is not None:
-        p["friend"] = str(friend.id) if friend.id != member.id else None
+    if invited_by is not None:
+        p["friend"] = str(invited_by.id)
     data["revoked"] = [r for r in data["revoked"] if r != uid]
     save(data)
     return tok
@@ -117,15 +148,72 @@ def allowed(inter):
 
 
 @tree.command(name="play", description="Get your personal Stembridge Valley invite code (sent privately).")
-@app_commands.describe(friend="Optional: start on this friend's farm (if it has room).")
-async def play(inter: discord.Interaction, friend: discord.Member | None = None):
+async def play(inter: discord.Interaction):
     if not allowed(inter):
         await inter.response.send_message("Use this in the Stembridge Valley Discord server.", ephemeral=True)
         return
-    tok = ensure_player(inter.user, friend)
-    extra = f"\nNew players are placed on **{friend.display_name}**'s farm if it has room." if friend else ""
-    await inter.response.send_message(f"Your invite code:\n```{code(str(inter.user.id), tok)}```{extra}\n\n{HOW_TO}", ephemeral=True)
+    tok = ensure_player(inter.user)
+    data = load()
+    fid, farm, me = farm_of(inter.user.id)
+    p = data["tokens"][tok]
+    if farm and me["started"]:
+        where = f"You live on **{farm['name']}**."
+    elif p.get("friend") and farm_of(p["friend"])[1]:
+        host = farm_of(p["friend"])[1]
+        where = f"You'll start on **{host['name']}** with {name_of(data, 'discord-' + p['friend'])} (if it still has room)."
+    else:
+        where = "You'll get a farm of your own. Bring friends onto it with **/invite**."
+    await inter.response.send_message(f"Your invite code:\n```{code(str(inter.user.id), tok)}```{where}\n\n{HOW_TO}", ephemeral=True)
     log.info("code for %s (%s)", inter.user, inter.user.id)
+
+
+@tree.command(name="invite", description="Invite a friend to live on your farm (up to 4 people).")
+@app_commands.describe(friend="Who to invite. They must not have made a farmer yet.")
+async def invite(inter: discord.Interaction, friend: discord.Member):
+    if not allowed(inter):
+        await inter.response.send_message("Use this in the Stembridge Valley Discord server.", ephemeral=True)
+        return
+    status = farms()
+    fid, farm, _ = farm_of(inter.user.id, status)
+    if not farm:
+        await inter.response.send_message("You don't have a farm yet: type **/play**, join the game once, then invite friends.", ephemeral=True)
+        return
+    if friend.bot or friend.id == inter.user.id:
+        await inter.response.send_message("Pick a friend to invite.", ephemeral=True)
+        return
+    ffid, ffarm, fme = farm_of(friend.id, status)
+    if ffid == fid:
+        await inter.response.send_message(f"{friend.display_name} already lives on your farm.", ephemeral=True)
+        return
+    if fme and fme["started"]:
+        await inter.response.send_message(
+            f"{friend.display_name} already has a farmer on **{ffarm['name']}**, so they can't move to yours. "
+            "Moving farms isn't possible yet.", ephemeral=True)
+        return
+    if len(farm["members"]) >= FARM_SIZE:
+        await inter.response.send_message(f"**{farm['name']}** is full ({FARM_SIZE}/{FARM_SIZE}).", ephemeral=True)
+        return
+    ensure_player(friend, invited_by=inter.user)
+    await inter.response.send_message(
+        f"{friend.mention}, {inter.user.display_name} invited you to live on **{farm['name']}**! "
+        "Type **/play** to get your code. You'll start there with your own cabin.")
+    log.info("%s invited %s to %s", inter.user.id, friend.id, fid)
+
+
+@tree.command(name="farm", description="See who lives on your farm.")
+async def farm_cmd(inter: discord.Interaction):
+    if not allowed(inter):
+        await inter.response.send_message("Use this in the Stembridge Valley Discord server.", ephemeral=True)
+        return
+    fid, farm, _ = farm_of(inter.user.id)
+    if not farm:
+        await inter.response.send_message("You don't have a farm yet: type **/play** and join the game.", ephemeral=True)
+        return
+    data = load()
+    names = [name_of(data, m["key"]) + ("" if m["started"] else " (not started yet)") for m in farm["members"]]
+    await inter.response.send_message(
+        f"**{farm['name']}** ({len(names)}/{FARM_SIZE}): {', '.join(names)}"
+        + ("" if len(names) >= FARM_SIZE else "\nInvite a friend with **/invite**."), ephemeral=True)
 
 
 @tree.command(name="newcode", description="Replace your invite code (if someone else saw it).")

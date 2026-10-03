@@ -82,15 +82,9 @@ internal static class Discord
             return false;
         key = KeyPrefix + p.Id;
         name = p.Name;
+        // "friend" = the member who invited them (/invite): a new player is placed on that member's farm.
         if (p.Friend != null && Farms.Enabled)
-        {
-            string friendKey = KeyPrefix + p.Friend;
-            // Online players live in otherFarmers; the saved farmhand list only catches up overnight.
-            Farmer? friend = Game1.getAllFarmers().Concat(Game1.netWorldState.Value.farmhandData.Values)
-                .FirstOrDefault(f => !f.IsMainPlayer && f.isCustomized.Value && f.userID.Value == friendKey);
-            if (friend != null)
-                friendFarm = Farms.HomeFarmOf(friend);
-        }
+            friendFarm = FarmRoster.FarmOfKey(KeyPrefix + p.Friend);
         return true;
     }
 

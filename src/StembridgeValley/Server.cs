@@ -169,9 +169,10 @@ internal static class Server
         if (Farms.Enabled)
         {
             FarmRoster.Load();
+            FarmRoster.TrimSpareCabins();
             FarmRoster.EnsureCabins();
             AlignCabins();
-            Log.Info($"{Farms.Count} farms: " + string.Join(", ", Farms.AllNames.Select(f => $"{Farms.DisplayName(f)} ({Farms.MembersOf(f).Count}/4)")));
+            Log.Info($"{Farms.Count} farms: " + string.Join(", ", Farms.AllNames.Select(f => $"{Farms.DisplayName(f)} ({FarmRoster.Members(f).Count}/4)")));
         }
         Helper.Data.WriteGlobalData(SaveKey, new ServerSaveData { SaveName = Constants.SaveFolderName });
         status = "running";
@@ -221,10 +222,10 @@ internal static class Server
     /// <summary>Build one ready-made cabin (with its blank farmhand) on a farm, near where the farmhouse would be.</summary>
     internal static bool BuildCabin(GameLocation farm, int index)
     {
-        // 4-player farms: cabins stand side by side in one row where the farmhouse would be.
+        // Player farms: cabins stand side by side in one row where the farmhouse would be (first free slot in the row).
         IEnumerable<Vector2> spots = CabinSpots(farm);
-        if (Farms.IsFarm(farm) && index < Farms.PlayersPerFarm)
-            spots = spots.Prepend(RowSpot(index));
+        if (Farms.IsFarm(farm))
+            spots = Enumerable.Range(0, Farms.PlayersPerFarm).Select(RowSpot).Concat(spots);
         foreach (var tile in spots)
         {
             if (!SpotIsClear(farm, tile))

@@ -25,8 +25,12 @@ internal static class Farms
     public const string Prefix = "SV_Farm";
     public const int PlayersPerFarm = 4;
     private static readonly string[] Names = { "Cedar", "Maple", "Willow", "Birch", "Aspen", "Pine", "Oak", "Elm", "Rowan", "Hazel",
-        "Juniper", "Alder", "Cypress", "Laurel", "Poplar", "Spruce", "Linden", "Sumac", "Holly", "Larch" };
-    /// <summary>Most farms the world can grow to (80 players).</summary>
+        "Juniper", "Alder", "Cypress", "Laurel", "Poplar", "Spruce", "Linden", "Sumac", "Holly", "Larch",
+        "Ash", "Beech", "Chestnut", "Dogwood", "Fir", "Hawthorn", "Hemlock", "Hickory", "Magnolia", "Mulberry",
+        "Olive", "Palm", "Redwood", "Sequoia", "Walnut", "Yew", "Acacia", "Banyan", "Sycamore", "Tamarack",
+        "Bramble", "Clover", "Fern", "Heather", "Ivy", "Lilac", "Meadow", "Moss", "Orchard", "Thistle",
+        "Briar", "Cobble", "Dell", "Glen", "Hollow", "Knoll", "Marsh", "Ridge", "Brook", "Vale" };
+    /// <summary>Most farms the world can grow to (every player can have their own).</summary>
     public static int MaxFarms => Names.Length;
     private static IModHelper Helper = null!;
     /// <summary>Server: how many farms are open. Grows as farms fill up; saved through farms.json.</summary>
@@ -146,9 +150,8 @@ internal static class Farms
         GameLocation farm = Game1.CreateGameLocation(name);
         Game1.locations.Add(farm);
         farm.AddDefaultBuildings();
-        for (int i = 0; i < PlayersPerFarm; i++)
-            Server.BuildCabin(farm, i);
-        Server.AlignCabins();
+        Server.BuildCabin(farm, 0); // one cabin; another is added beside it for each invited friend
+        farm.modData["SV.CabinsInRow"] = "1";
         FarmRoster.Load(); // gives it an invite code
         Server.SetPlayerLimit();
         var send = AccessTools.Method(typeof(GameServer), "sendLocation");
@@ -237,15 +240,11 @@ internal static class Farms
         var responses = new List<Response>();
         if (home != null)
             responses.Add(new Response(home, $"Home ({DisplayName(home)})"));
-        foreach (string name in AllNames)
-        {
-            if (name == home)
-                continue;
-            var members = MembersOf(name);
-            if (members.Count == 0)
-                continue;
-            responses.Add(new Response(name, $"{DisplayName(name)}: {string.Join(", ", members.Select(m => m.Name))}"));
-        }
+        // With a farm per player the full list gets long: show farms with someone online now (busiest first).
+        var online = Game1.getOnlineFarmers().Where(f => !f.IsMainPlayer).ToList();
+        foreach (var group in online.GroupBy(f => HomeFarmOf(f)).Where(g => g.Key != null && g.Key != home)
+                     .OrderByDescending(g => g.Count()).Take(6))
+            responses.Add(new Response(group.Key!, $"{DisplayName(group.Key!)}: {string.Join(", ", group.Select(m => m.Name))}"));
         responses.Add(new Response("cancel", "Never mind"));
         Game1.currentLocation.createQuestionDialogue("Which farm do you want to go to?", responses.ToArray(), (who, answer) =>
         {

@@ -19,7 +19,6 @@ internal static class Network
     /// <summary>Farm a connection is being placed on, while the game asks "is this farmhand available?".</summary>
     [ThreadStatic] private static string? placingKey;
     [ThreadStatic] private static string? placingFarm;
-    private static readonly Dictionary<string, string> PlacementByKey = new();
 
     public static void Apply(Harmony harmony)
     {
@@ -191,8 +190,8 @@ internal static class Network
     }
 
     /// <summary>
-    /// 4-player farms: a returning player only sees their own farmer; a new player only sees the empty
-    /// cabins on the one farm chosen for them (their invite's farm, or any farm with room).
+    /// A returning player only sees their own farmer; a new player only sees the empty cabins on the farm chosen
+    /// for them (a farm they were invited to, or their own).
     /// </summary>
     private static void BeginPlacement(string key, string connectionId)
     {
@@ -200,21 +199,16 @@ internal static class Network
         if (!Farms.Enabled)
             return;
         placingKey = key;
-        bool hasCharacter = Game1.netWorldState.Value.farmhandData.Values.Any(f => f.isCustomized.Value && f.userID.Value == key);
+        bool hasCharacter = Game1.netWorldState.Value.farmhandData.Values.Concat(Game1.getAllFarmers())
+            .Any(f => !f.IsMainPlayer && f.isCustomized.Value && f.userID.Value == key);
         if (hasCharacter)
             return;
-        // Keep the same choice between "show the list" and "I picked this cabin", unless that farm filled up meanwhile.
-        if (!PlacementByKey.TryGetValue(key, out string? farm) || FarmRoster.FreeSlots(farm) == 0)
+        InvitedFarmByConnection.TryGetValue(connectionId, out string? invited);
+        string? farm = FarmRoster.PlaceNewPlayer(key, invited);
+        if (farm == null)
         {
-            InvitedFarmByConnection.TryGetValue(connectionId, out string? invited);
-            farm = FarmRoster.PlaceNewPlayer(invited);
-            if (farm == null)
-            {
-                Log.Warn($"Every farm is full; player {Short(key)} can't join.");
-                return;
-            }
-            PlacementByKey[key] = farm;
-            Log.Info($"New player {Short(key)} goes to {Farms.DisplayName(farm)}" + (invited != null && invited != farm ? $" ({Farms.DisplayName(invited)} was full)." : "."));
+            Log.Warn($"No farm available; player {Short(key)} can't join.");
+            return;
         }
         placingFarm = farm;
     }
