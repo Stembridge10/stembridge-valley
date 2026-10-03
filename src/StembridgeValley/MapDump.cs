@@ -51,6 +51,17 @@ internal static class MapDump
         {
             Log.Info($"[mapdump] tile export failed: {ex.Message}");
         }
+        try
+        {
+            var locs = Game1.content.Load<Dictionary<string, StardewValley.GameData.Locations.LocationData>>("Data\\Locations");
+            Log.Info($"[mapdump] farm location data: {string.Join(" ", locs.Keys.Where(k => k.StartsWith("Farm")))}");
+            foreach (var f in Game1.content.Load<List<StardewValley.GameData.ModFarmType>>("Data\\AdditionalFarms"))
+                Log.Info($"[mapdump] additional farm: {f.Id} map={f.MapName} tooltip={f.TooltipStringPath} icon={f.IconTexture} mail={f.SpawnMonstersByDefault}");
+        }
+        catch (Exception ex)
+        {
+            Log.Info($"[mapdump] data: {ex.Message}");
+        }
         foreach (string name in want.Split(','))
         {
             GameLocation? loc = Game1.getLocationFromName(name.Trim());

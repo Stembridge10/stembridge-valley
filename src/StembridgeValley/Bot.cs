@@ -241,9 +241,9 @@ internal static class Bot
     private static int quarryHold = -1;
 
     /// <summary>
-    /// Test of the Hills and the quarry (SV_BOT_QUARRY=1; one step every ~3 seconds): go home to the farm's left
-    /// edge, walk off it into the Hills, cross the bridge, walk to the quarry stairs, level Mining to 15 (as if
-    /// earned), report the rocks the server puts in the quarry, then walk back to the farm. Photographs along the way.
+    /// Test of the farm quarry (SV_BOT_QUARRY=1; one step every ~3 seconds): with Mining below 15, walk off the
+    /// farm's left edge and get turned back; level Mining to 15 (as if earned), walk off again into the quarry area,
+    /// report the rocks the server put there, then walk off its right edge back to the farm. Photographs on the way.
     /// </summary>
     private static bool QuarryCheck()
     {
@@ -266,8 +266,8 @@ internal static class Bot
         quarryWait = 0;
         quarryStage++;
         string? home = Farms.HomeFarmOf(Game1.player);
-        string hillsName = home != null ? Quarry.HillsOf(home) : "-";
-        GameLocation? hills = Game1.getLocationFromName(hillsName);
+        string quarryName = home != null ? Quarry.QuarryOf(home) : "-";
+        GameLocation? quarry = Game1.getLocationFromName(quarryName);
         GameLocation here = Game1.currentLocation!;
         bool Walk(int x, int y) => !here.isCollidingPosition(new Microsoft.Xna.Framework.Rectangle(x * 64 + 16, y * 64 + 16, 32, 32), Game1.viewport, true, 0, false, Game1.player);
         void Go(Point to, string what)
@@ -280,58 +280,54 @@ internal static class Bot
         switch (quarryStage)
         {
             case 1:
-                Log.Info($"[quarry] at {here.Name}, home {home}; going to the farm's left edge");
+                // Start below the unlock (test world only).
+                if (Skills.Level(Game1.player, Skills.Mining) >= Quarry.UnlockLevel)
+                    Game1.player.experiencePoints[Skills.Mining] = Skills.XpForLevel(9);
+                Log.Info($"[quarry] at {here.Name}, home {home}; Mining {Skills.Level(Game1.player, Skills.Mining)}; going to the farm's left edge");
                 if (home != null)
                     Game1.warpFarmer(home, 6, 45, 3);
                 break;
             case 2:
-                Log.Info($"[quarry] at {here.Name} {Game1.player.TilePoint}; left-edge path walkable: {string.Join(" ", Enumerable.Range(0, 4).Select(x => $"{x},45={(Walk(x, 45) ? "ok" : "X")}"))}; exits: {string.Join(" ", here.warps.Where(w => w.X < 0).Select(w => $"{w.X},{w.Y}->{w.TargetName} {w.TargetX},{w.TargetY}"))}");
-                Snapshot("hills-farm-edge.png", 6, 45);
+                Log.Info($"[quarry] at {here.Name} {Game1.player.TilePoint}; left-edge path walkable: {string.Join(" ", Enumerable.Range(0, 4).Select(x => $"{x},45={(Walk(x, 45) ? "ok" : "X")}"))}; exits: {string.Join(" ", here.warps.Where(w => w.X < 0).Select(w => $"{w.X},{w.Y}->{w.TargetName} {w.TargetX},{w.TargetY}"))}; farm says best Mining {(home != null ? Quarry.PublishedLevel(home) : -1)}");
+                Snapshot("quarry-farm-edge.png", 6, 45);
                 Go(new Point(0, 45), "to the left edge");
                 break;
             case 3:
-                // Walking off the edge: keep going left until the warp fires.
-                if (here.Name == hillsName)
-                    goto case 4;
-                Log.Info($"[quarry] at {here.Name} {Game1.player.TilePoint}; stepping off the edge");
+                Log.Info($"[quarry] locked try: at {here.Name} {Game1.player.TilePoint}; stepping off the edge");
                 Game1.player.faceDirection(3);
                 quarryHold = 3;
                 break;
             case 4:
                 Game1.player.Halt();
-                Log.Info($"[quarry] now at {here.Name} {Game1.player.TilePoint} (in the Hills: {here.Name == hillsName}); map {here.map.Layers[0].LayerWidth}x{here.map.Layers[0].LayerHeight}; exits: {string.Join(" ", here.warps.Select(w => $"{w.X},{w.Y}->{w.TargetName}"))}");
-                Snapshot("hills-arrive.png", Game1.player.TilePoint.X - 6, Game1.player.TilePoint.Y);
-                if (here.Name == hillsName)
-                    Go(new Point(Quarry.Bridge.X, Quarry.Bridge.Y - 2), "to the bridge");
-                break;
-            case 5:
-                Log.Info($"[quarry] at {Game1.player.TilePoint}; bridge walkable {Enumerable.Range(0, 4).All(i => Walk(Quarry.Bridge.X, Quarry.Bridge.Y + i))}, river beside it walkable {Walk(Quarry.Bridge.X - 1, Quarry.Bridge.Y + 1)}");
-                Go(new Point(Quarry.Bridge.X, Quarry.Bridge.Y + 6), "across the bridge");
-                break;
-            case 6:
-                Log.Info($"[quarry] crossed the bridge: {Game1.player.TilePoint.Y > Quarry.Bridge.Y + 3} at {Game1.player.TilePoint}");
-                Snapshot("hills-bridge.png", Quarry.Bridge.X, Quarry.Bridge.Y + 1);
-                Go(Quarry.Steps, "to the quarry stairs");
-                break;
-            case 8:
-                Log.Info($"[quarry] at {Game1.player.TilePoint} (stairs {Quarry.Steps}); Mining {Skills.Level(Game1.player, Skills.Mining)}, rocks in quarry {(hills != null ? Quarry.RocksIn(hills) : -1)}");
-                Snapshot("hills-quarry-before.png", Quarry.Area.Center.X, Quarry.Area.Center.Y + 2);
+                Log.Info($"[quarry] locked result: at {here.Name} {Game1.player.TilePoint} (still on the farm: {here.Name == home})");
                 Game1.player.gainExperience(Skills.Mining, Skills.XpForLevel(15) - Skills.Xp(Game1.player, Skills.Mining));
                 Log.Info($"[quarry] Mining now {Skills.Level(Game1.player, Skills.Mining)}");
                 break;
-            case 12:
-                Log.Info($"[quarry] rocks in quarry now {(hills != null ? Quarry.RocksIn(hills) : -1)}: {string.Join(" ", hills?.objects.Pairs.Where(p => Quarry.Area.Contains((int)p.Key.X, (int)p.Key.Y)).Select(p => p.Value.ItemId) ?? Array.Empty<string>())}");
-                Snapshot("hills-quarry-after.png", Quarry.Area.Center.X, Quarry.Area.Center.Y + 2);
-                Go(new Point(Quarry.HillsArrival.X + 1, Quarry.HillsArrival.Y), "back to the Hills entrance");
+            case 7:
+                Log.Info($"[quarry] farm says best Mining {(home != null ? Quarry.PublishedLevel(home) : -1)}; stepping off the edge again from {Game1.player.TilePoint}");
+                Game1.player.faceDirection(3);
+                quarryHold = 3;
                 break;
-            case 16:
-                if (here.Name == hillsName)
+            case 8:
+                Game1.player.Halt();
+                Log.Info($"[quarry] now at {here.Name} {Game1.player.TilePoint} (in the quarry: {here.Name == quarryName}); map {here.map.Layers[0].LayerWidth}x{here.map.Layers[0].LayerHeight}; exits: {string.Join(" ", here.warps.Select(w => $"{w.X},{w.Y}->{w.TargetName}"))}");
+                Snapshot("quarry-arrive.png", Game1.player.TilePoint.X - 6, Game1.player.TilePoint.Y);
+                if (here.Name == quarryName)
+                    Go(Quarry.Middle, "to the middle of the quarry");
+                break;
+            case 10:
+                Log.Info($"[quarry] at {Game1.player.TilePoint}; rocks in quarry {(quarry != null ? Quarry.RocksIn(quarry) : -1)}: {string.Join(" ", quarry?.objects.Pairs.Where(p => Quarry.Area.Contains((int)p.Key.X, (int)p.Key.Y)).Select(p => p.Value.ItemId) ?? Array.Empty<string>())}");
+                Snapshot("quarry-inside.png", Quarry.Middle.X, Quarry.Middle.Y);
+                Go(new Point(Quarry.Arrival.X, Quarry.Arrival.Y), "back to the quarry entrance");
+                break;
+            case 13:
+                if (here.Name == quarryName)
                 {
                     Game1.player.faceDirection(1);
                     quarryHold = 1;
                 }
                 break;
-            case 17:
+            case 14:
                 Game1.player.Halt();
                 Log.Info($"[quarry] back at {here.Name} {Game1.player.TilePoint} (home farm: {here.Name == home})");
                 break;

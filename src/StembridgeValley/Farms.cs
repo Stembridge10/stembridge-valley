@@ -194,7 +194,7 @@ internal static class Farms
         farm.AddDefaultBuildings();
         Server.BuildCabin(farm, 0); // one cabin; another is added beside it for each invited friend
         farm.modData["SV.CabinsInRow"] = "1";
-        GameLocation hills = Quarry.EnsureHills(name);
+        GameLocation quarry = Quarry.EnsureQuarry(name);
         FarmRoster.Load(); // gives it an invite code
         Server.SetPlayerLimit();
         var send = AccessTools.Method(typeof(GameServer), "sendLocation");
@@ -202,7 +202,7 @@ internal static class Farms
             foreach (long peer in Game1.otherFarmers.Keys.ToList())
             {
                 send.Invoke(gs, new object[] { peer, farm, false });
-                send.Invoke(gs, new object[] { peer, hills, false });
+                send.Invoke(gs, new object[] { peer, quarry, false });
             }
         Log.Info($"Opened {DisplayName(name)}: {serverOpen} farms now.");
         return name;
@@ -217,8 +217,8 @@ internal static class Farms
         {
             if (IsFarm(loc) || loc is Farm)
                 return loc;
-            if (Quarry.IsHills(loc))
-                return Game1.getLocationFromName(Quarry.FarmOfHills(loc.Name)); // a farm's Hills belong to it
+            if (Quarry.IsQuarry(loc))
+                return Game1.getLocationFromName(Quarry.FarmOfQuarry(loc.Name)); // a farm's quarry belongs to it
             loc = loc.GetParentLocation();
         }
         return null;
