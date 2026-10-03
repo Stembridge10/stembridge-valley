@@ -257,7 +257,13 @@ internal static class Bot
         if (quarryHold >= 0 && Game1.locationRequest == null)
         {
             // The game's own walking step (collisions and map-edge exits), as when a player holds a direction key.
-            if (quarryHold == 3) Game1.player.SetMovingLeft(true); else Game1.player.SetMovingRight(true);
+            switch (quarryHold)
+            {
+                case 3: Game1.player.SetMovingLeft(true); break;
+                case 2: Game1.player.SetMovingDown(true); break;
+                case 0: Game1.player.SetMovingUp(true); break;
+                default: Game1.player.SetMovingRight(true); break;
+            }
             Game1.player.MovePosition(Game1.currentGameTime, Game1.viewport, Game1.currentLocation);
         }
         if (Game1.locationRequest != null || Game1.player.controller != null || ++quarryWait < 180)
@@ -269,6 +275,13 @@ internal static class Bot
         string quarryName = home != null ? Quarry.QuarryOf(home) : "-";
         GameLocation? quarry = Game1.getLocationFromName(quarryName);
         GameLocation here = Game1.currentLocation!;
+        var side = home != null ? Quarry.SideOf(Game1.getLocationFromName(home)) : null;
+        // The edge tile the path leaves from, and a start point well inside the farm along the lane.
+        Point edge = side == null ? new Point(0, 45) : side.Dir == 2
+            ? new Point(side.Exits[side.Exits.Length / 2].X, side.Exits[0].Y - 1)
+            : new Point(0, side.Exits[side.Exits.Length / 2].Y);
+        Point start = side?.Dir == 2 ? new Point(edge.X, edge.Y - 12) : new Point(edge.X + 12, edge.Y);
+        int dir = side?.Dir ?? 3;
         bool Walk(int x, int y) => !here.isCollidingPosition(new Microsoft.Xna.Framework.Rectangle(x * 64 + 16, y * 64 + 16, 32, 32), Game1.viewport, true, 0, false, Game1.player);
         void Go(Point to, string what)
         {
@@ -283,19 +296,19 @@ internal static class Bot
                 // Start below the unlock (test world only).
                 if (Skills.Level(Game1.player, Skills.Mining) >= Quarry.UnlockLevel)
                     Game1.player.experiencePoints[Skills.Mining] = Skills.XpForLevel(9);
-                Log.Info($"[quarry] at {here.Name}, home {home}; Mining {Skills.Level(Game1.player, Skills.Mining)}; going to the farm's left edge");
+                Log.Info($"[quarry] at {here.Name}, home {home} (map {Game1.getLocationFromName(home ?? "")?.mapPath.Value}); Mining {Skills.Level(Game1.player, Skills.Mining)}; going to the farm's quarry path at {edge}, from {start}");
                 if (home != null)
-                    Game1.warpFarmer(home, 12, 45, 3);
+                    Game1.warpFarmer(home, start.X, start.Y, dir);
                 break;
             case 2:
-                Log.Info($"[quarry] at {here.Name} {Game1.player.TilePoint}; left-edge path walkable: {string.Join(" ", Enumerable.Range(0, 4).Select(x => $"{x},45={(Walk(x, 45) ? "ok" : "X")}"))}; exits: {string.Join(" ", here.warps.Where(w => w.X < 0).Select(w => $"{w.X},{w.Y}->{w.TargetName} {w.TargetX},{w.TargetY}"))}; farm says best Mining {(home != null ? Quarry.PublishedLevel(home) : -1)}");
-                Snapshot("quarry-farm-edge.png", 6, 45);
-                Go(new Point(0, 45), "to the left edge");
+                Log.Info($"[quarry] at {here.Name} {Game1.player.TilePoint}; path walkable: {string.Join(" ", Enumerable.Range(0, 4).Select(i => dir == 2 ? new Point(edge.X, edge.Y - i) : new Point(edge.X + i, edge.Y)).Select(t => $"{t.X},{t.Y}={(Walk(t.X, t.Y) ? "ok" : "X")}"))}; exits: {string.Join(" ", here.warps.Where(w => w.TargetName.StartsWith(Quarry.Prefix)).Select(w => $"{w.X},{w.Y}->{w.TargetName} {w.TargetX},{w.TargetY}"))}; farm says best Mining {(home != null ? Quarry.PublishedLevel(home) : -1)}");
+                Snapshot("quarry-farm-edge.png", dir == 2 ? edge.X : edge.X + 6, dir == 2 ? edge.Y - 5 : edge.Y);
+                Go(edge, "to the quarry path's edge");
                 break;
             case 3:
                 Log.Info($"[quarry] locked try: at {here.Name} {Game1.player.TilePoint}; stepping off the edge");
-                Game1.player.faceDirection(3);
-                quarryHold = 3;
+                Game1.player.faceDirection(dir);
+                quarryHold = dir;
                 break;
             case 4:
                 Game1.player.Halt();
@@ -305,8 +318,8 @@ internal static class Bot
                 break;
             case 7:
                 Log.Info($"[quarry] farm says best Mining {(home != null ? Quarry.PublishedLevel(home) : -1)}; stepping off the edge again from {Game1.player.TilePoint}");
-                Game1.player.faceDirection(3);
-                quarryHold = 3;
+                Game1.player.faceDirection(dir);
+                quarryHold = dir;
                 break;
             case 8:
                 Game1.player.Halt();
@@ -331,6 +344,7 @@ internal static class Bot
             case 14:
                 Game1.player.Halt();
                 Log.Info($"[quarry] back at {here.Name} {Game1.player.TilePoint} (home farm: {here.Name == home})");
+                Snapshot("quarry-farm-back.png", Game1.player.TilePoint.X, Game1.player.TilePoint.Y);
                 break;
         }
         return true;

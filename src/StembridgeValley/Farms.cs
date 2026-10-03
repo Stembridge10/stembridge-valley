@@ -39,6 +39,11 @@ internal static class Farms
     /// <summary>Where you arrive on a farm from the bus stop road (same as vanilla).</summary>
     public static readonly Point RoadEntry = new(79, 17);
 
+    /// <summary>Test worlds only: SV_TEST_FARM_MAP=Farm_Ranching makes new farms use that farm map (until the
+    /// farm-map picker exists). Never set on the live server.</summary>
+    private static readonly string? TestFarmMap =
+        Environment.GetEnvironmentVariable("SV_TEST_FARM_MAP") is { Length: > 0 } m ? "Maps\\" + m : null;
+
     /// <summary>Left tile of the 3-wide visit-a-farm notice board in the bus stop's farm-road fence.</summary>
     private static readonly Point VisitBoard = new(14, 21);
 
@@ -140,7 +145,7 @@ internal static class Farms
                     entry.DisplayName = DefaultName(name);
                     entry.DefaultArrivalTile = RoadEntry;
                     entry.CreateOnLoad = server
-                        ? new CreateLocationData { MapPath = "Maps\\Farm", Type = "StardewValley.Farm", AlwaysActive = true }
+                        ? new CreateLocationData { MapPath = TestFarmMap ?? "Maps\\Farm", Type = "StardewValley.Farm", AlwaysActive = true }
                         : new CreateLocationData { MapPath = "Maps\\Cellar", AlwaysActive = false };
                     data[name] = entry;
                 }

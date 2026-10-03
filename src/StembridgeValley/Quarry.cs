@@ -30,10 +30,32 @@ internal static class Quarry
     /// <summary>The part of the Mountain map that becomes the quarry area.</summary>
     private const int SrcX = 96, Width = 39, Height = 41;
 
-    /// <summary>Farm side (standard farm map): walking off the left edge on these rows goes to the quarry.</summary>
-    public static readonly int[] FarmExitRows = { 44, 45, 46 };
-    /// <summary>Where you arrive on the farm coming back.</summary>
-    public static readonly Point FarmArrival = new(1, 45);
+    /// <summary>
+    /// The farm's side of the path to the quarry, per farm map: the off-map tiles that lead there, where you come
+    /// back to, which way you walk to leave, and the strips kept clear of wild debris (the opening, the lane to it).
+    /// </summary>
+    public sealed record FarmSide(string Map, Point[] Exits, Point Arrival, int Dir, XRect Way, XRect Lane);
+
+    public static readonly FarmSide[] Sides =
+    {
+        // Standard: a gap in the left bank under a rock wall.
+        // (row 47, under the grass lip, is open at the edge too, so it is an exit as well: no walking off the map)
+        new("Maps\\Farm", Row(-1, 44, 47), new(1, 45), 3, new(0, 43, 8, 5), new(0, 44, 16, 3)),
+        // Meadowlands: a small plank bridge over the river on the left, to a little grass landing at the edge.
+        new("Maps\\Farm_Ranching", Row(-1, 28, 30), new(1, 29), 3, new(0, 28, 4, 3), new(0, 27, 15, 5)),
+        // Beach: the dock at the bottom runs on off the bottom edge.
+        new("Maps\\Farm_Island", Column(110, 51, 53), new(52, 108), 2, new(51, 95, 3, 15), new(51, 95, 3, 15)),
+    };
+
+    private static Point[] Row(int x, int y0, int y1) => Enumerable.Range(y0, y1 - y0 + 1).Select(y => new Point(x, y)).ToArray();
+    private static Point[] Column(int y, int x0, int x1) => Enumerable.Range(x0, x1 - x0 + 1).Select(x => new Point(x, y)).ToArray();
+
+    /// <summary>This farm's side of the quarry path, or null when its farm map has none yet.</summary>
+    public static FarmSide? SideOf(GameLocation? farm)
+    {
+        string map = (farm?.mapPath.Value ?? "").Replace('/', '\\');
+        return Sides.FirstOrDefault(sd => sd.Map.Equals(map, StringComparison.OrdinalIgnoreCase));
+    }
     /// <summary>Quarry side: walking off the right edge on these rows goes back to the farm.</summary>
     public static readonly int[] QuarryExitRows = { 21, 22, 23 };
     /// <summary>Where you arrive in the quarry area.</summary>
@@ -97,6 +119,10 @@ internal static class Quarry
             e.LoadFrom(BuildMap, AssetLoadPriority.Exclusive);
         else if (e.NameWithoutLocale.IsEquivalentTo("Maps/Farm"))
             e.Edit(asset => OpenFarmLeftEdge(asset.AsMap().Data));
+        else if (e.NameWithoutLocale.IsEquivalentTo("Maps/Farm_Ranching"))
+            e.Edit(asset => AddMeadowBridge(asset.AsMap().Data));
+        else if (e.NameWithoutLocale.IsEquivalentTo("Maps/Farm_Island"))
+            e.Edit(asset => ExtendBeachDock(asset.AsMap().Data));
     }
 
     /// <summary>The quarry area: a copy of the Mountain's quarry corner, with a path through its right-hand forest.</summary>
@@ -257,23 +283,90 @@ internal static class Quarry
         Set(front, 0, 47, 413); Set(front, 1, 47, 414); Set(front, 2, 47, 438);
     }
 
-    /// <summary>Server: the farm's left edge leads to its quarry; the quarry's right edge leads back.</summary>
+    /// <summary>
+    /// Meadowlands: a plank bridge over the river on row 29 (Riverland's own bridge pieces), landing on a small
+    /// grass spot cleared at the left edge. Invisible walls along both sides of the planks, like Riverland's
+    /// bridges, so nobody steps off into the river. Matches the preview (meadow_D.json); a walk check of it finds
+    /// no way off the map and no walking on water.
+    /// </summary>
+    private static void AddMeadowBridge(Map map)
+    {
+        TileSheet? s = map.TileSheets.FirstOrDefault(t => t.Id == "untitled tile sheet");
+        Layer? back = map.GetLayer("Back"), buildings = map.GetLayer("Buildings");
+        if (s == null || back == null || buildings == null || back.LayerWidth < 20 || back.LayerHeight < 40)
+        {
+            Log.Warn("Quarry: the Meadowlands map isn't the expected one; no path to the quarry.");
+            return;
+        }
+        void Set(Layer layer, int x, int y, int? index) =>
+            layer.Tiles[x, y] = index is int i ? new StaticTile(layer, s, BlendMode.Alpha, i) : null;
+
+        Set(back, 8, 29, 1271);   // this river tile blocks walking (Passable=F); plain water under the bridge
+        Set(buildings, 0, 28, null); Set(buildings, 1, 28, null); Set(buildings, 2, 28, null); Set(buildings, 3, 28, null); Set(buildings, 5, 28, 16); Set(buildings, 6, 28, 16); Set(buildings, 7, 28, 16);
+        Set(buildings, 0, 29, null); Set(buildings, 1, 29, null); Set(buildings, 2, 29, null); Set(buildings, 3, 29, null); Set(buildings, 4, 29, 779); Set(buildings, 5, 29, 780); Set(buildings, 6, 29, 781); Set(buildings, 7, 29, 780); Set(buildings, 8, 29, 781); Set(buildings, 9, 29, 782);
+        Set(buildings, 0, 30, null); Set(buildings, 1, 30, null); Set(buildings, 2, 30, null); Set(buildings, 3, 30, null); Set(buildings, 5, 30, 16); Set(buildings, 6, 30, 16); Set(buildings, 7, 30, 16); Set(buildings, 8, 30, 16);
+        for (int x = 4; x <= 9; x++)
+        {
+            buildings.Tiles[x, 29].Properties["Passable"] = "T";
+            buildings.Tiles[x, 29].Properties["NoSpawn"] = "All";
+            buildings.Tiles[x, 29].Properties["Type"] = "Wood";
+        }
+    }
+
+    /// <summary>
+    /// Beach: the dock at the bottom runs on to the bottom edge (rows 102-109), same planks and railings as the
+    /// dock above. The surf drawn over its end is cleared so it doesn't cover the dock or the player. Matches the
+    /// preview (beach_A.json); a walk check finds no new way off the map.
+    /// </summary>
+    private static void ExtendBeachDock(Map map)
+    {
+        TileSheet? s = map.TileSheets.FirstOrDefault(t => t.Id == "untitled tile sheet2");
+        Layer? back = map.GetLayer("Back"), buildings = map.GetLayer("Buildings"), over = map.GetLayer("AlwaysFront");
+        if (s == null || back == null || buildings == null || back.LayerWidth < 60 || back.LayerHeight < 110)
+        {
+            Log.Warn("Quarry: the Beach map isn't the expected one; no path to the quarry.");
+            return;
+        }
+        void Set(Layer layer, int x, int y, int? index) =>
+            layer.Tiles[x, y] = index is int i ? new StaticTile(layer, s, BlendMode.Alpha, i) : null;
+
+        for (int y = 102; y <= 109; y++)
+        {
+            bool odd = (y - 102) % 2 == 1;   // the dock alternates two plank rows and two railing pieces
+            int[] planks = odd ? new[] { 552, 553, 554 } : new[] { 549, 550, 551 };
+            for (int i = 0; i < 3; i++)
+            {
+                Set(back, 51 + i, y, planks[i]);
+                back.Tiles[51 + i, y].Properties["NoSpawn"] = "All";
+                Set(buildings, 51 + i, y, null);
+                if (over != null && y >= 108)
+                    Set(over, 51 + i, y, null);
+            }
+            Set(buildings, 50, y, odd ? 525 : 557);
+            Set(buildings, 54, y, odd ? 556 : 524);
+        }
+    }
+
+    /// <summary>Server: the farm's side of the path leads to its quarry; the quarry's right edge leads back.</summary>
     private static void UpdateWarps_Postfix(GameLocation __instance)
     {
         if (Game1.IsClient)
             return;
         if (Farms.IsFarm(__instance))
         {
+            if (SideOf(__instance) is not { } side)
+                return;
             string quarry = QuarryOf(__instance.Name);
-            foreach (int y in FarmExitRows)
-                __instance.warps.Add(new Warp(-1, y, quarry, Arrival.X, Arrival.Y, false));
+            foreach (Point p in side.Exits)
+                __instance.warps.Add(new Warp(p.X, p.Y, quarry, Arrival.X, Arrival.Y, false));
         }
         else if (IsQuarry(__instance))
         {
             string farm = FarmOfQuarry(__instance.Name);
             __instance.warps.Clear();
+            Point back = SideOf(Game1.getLocationFromName(farm))?.Arrival ?? Farms.RoadEntry;
             foreach (int y in QuarryExitRows)
-                __instance.warps.Add(new Warp(Width, y, farm, FarmArrival.X, FarmArrival.Y, false));
+                __instance.warps.Add(new Warp(Width, y, farm, back.X, back.Y, false));
         }
     }
 
@@ -304,11 +397,15 @@ internal static class Quarry
         string farm = FarmOfQuarry(target);
         if (PublishedLevel(farm) >= UnlockLevel)
             return true;
-        if (Game1.currentLocation?.Name == farm)
+        if (Game1.currentLocation?.Name == farm && SideOf(Game1.currentLocation) is { } side)
         {
+            // Step back from the edge, facing the farm.
             Game1.player.Halt();
-            Game1.player.Position = new Vector2(FarmArrival.X * 64 + 32, Game1.player.Position.Y);
-            Game1.player.faceDirection(1);
+            var pos = Game1.player.Position;
+            Game1.player.Position = side.Dir is 1 or 3
+                ? new Vector2(side.Arrival.X * 64, pos.Y)
+                : new Vector2(pos.X, side.Arrival.Y * 64);
+            Game1.player.faceDirection((side.Dir + 2) % 4);
         }
         if (Game1.ticks - lastRefusal > 120)
         {
@@ -340,14 +437,8 @@ internal static class Quarry
 
     private static int RocksPerDay(int level) => (level >= 30 ? 10 : 6) * (level >= 45 ? 2 : 1);
 
-    /// <summary>The farm's side of the opening: the farm's starting debris (stumps, rocks, weeds) lands there too.</summary>
-    public static readonly XRect FarmWay = new(0, FarmExitRows[0] - 1, 8, FarmExitRows.Length + 2);
-
-    /// <summary>A walkable lane from the open farm to the opening, kept free of wild trees and boulders too.</summary>
-    public static readonly XRect FarmLane = new(0, FarmExitRows[0], 16, FarmExitRows.Length);
-
     /// <summary>Remove natural debris only (stumps, boulders, logs, weeds, stones, twigs, grass), never anything a player placed.</summary>
-    private static void ClearDebris(GameLocation loc, XRect area)
+    private static void ClearDebris(GameLocation loc, XRect area, XRect lane)
     {
         for (int i = loc.resourceClumps.Count - 1; i >= 0; i--)
         {
@@ -363,7 +454,7 @@ internal static class Quarry
                     loc.objects.Remove(tile);
                 if (loc.terrainFeatures.TryGetValue(tile, out var tf) && (tf is StardewValley.TerrainFeatures.Grass
                     // wild trees from the farm's starting debris, on the lane only (never fruit trees, tapped or fertilized ones)
-                    || (tf is StardewValley.TerrainFeatures.Tree t && FarmLane.Contains(x, y) && IsFarmSide(loc) && !t.tapped.Value && !t.fertilized.Value)))
+                    || (tf is StardewValley.TerrainFeatures.Tree t && lane.Contains(x, y) && IsFarmSide(loc) && !t.tapped.Value && !t.fertilized.Value)))
                     loc.terrainFeatures.Remove(tile);
             }
     }
@@ -383,10 +474,10 @@ internal static class Quarry
     private static void ClearAllWays()
     {
         foreach (string farm in Farms.AllNames)
-            if (Game1.getLocationFromName(farm) is { } f)
+            if (Game1.getLocationFromName(farm) is { } f && SideOf(f) is { } side)
             {
-                ClearDebris(f, FarmWay);
-                ClearDebris(f, FarmLane);
+                ClearDebris(f, side.Way, side.Lane);
+                ClearDebris(f, side.Lane, side.Lane);
             }
     }
 
