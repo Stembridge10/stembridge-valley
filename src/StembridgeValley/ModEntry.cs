@@ -34,6 +34,7 @@ internal sealed class ModEntry : Mod
         Rules.Apply(helper, harmony);
         Network.Apply(harmony);
         Farms.Apply(helper, harmony);
+        FarmSettings.Apply(helper);
         if (SV.Role == Role.Server)
         {
             Server.Apply(helper, harmony);

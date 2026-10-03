@@ -49,7 +49,10 @@ internal static class Farms
         : Game1.locations.Where(l => IsFarm(l) && l.isAlwaysActive.Value).Select(l => l.Name).ToList();
     public static int Count => AllNames.Count();
     public static string LocationName(int i) => Prefix + i;
+    /// <summary>The farm's name: the one its owner chose, else its starting tree name ("Cedar Farm").</summary>
     public static string DisplayName(string locationName) =>
+        FarmSettings.ChosenName(locationName) is { } chosen ? chosen + " Farm" : DefaultName(locationName);
+    public static string DefaultName(string locationName) =>
         int.TryParse(locationName.AsSpan(Prefix.Length), out int i) && i >= 1 && i <= Names.Length ? Names[i - 1] + " Farm" : locationName;
     public static bool IsFarm(GameLocation? loc) => loc != null && loc.Name.StartsWith(Prefix, StringComparison.Ordinal);
 
@@ -133,7 +136,7 @@ internal static class Farms
                     string name = LocationName(i);
                     // Same fish, forage and artifact spots as the normal farm.
                     var entry = standard != null ? (LocationData)clone.Invoke(standard, null)! : new LocationData();
-                    entry.DisplayName = DisplayName(name);
+                    entry.DisplayName = DefaultName(name);
                     entry.DefaultArrivalTile = RoadEntry;
                     entry.CreateOnLoad = server
                         ? new CreateLocationData { MapPath = "Maps\\Farm", Type = "StardewValley.Farm", AlwaysActive = true }
@@ -295,24 +298,121 @@ internal static class Farms
 
     // ---------- visiting ----------
 
-    public static void ShowVisitMenu()
+    private const int FarmsPerPage = 5;
+
+    /// <summary>
+    /// The notice board. Any farm that's open to visitors can be visited any time, even with nobody home:
+    /// farms with people online first, then the rest, five to a page. Owners also get their farm's settings here.
+    /// </summary>
+    public static void ShowVisitMenu() => ShowVisitMenu(0);
+
+    /// <summary>The owner said "Not now" to naming this session: don't ask again (it's still under "My farm's settings").</summary>
+    public static bool NamingDeclined;
+
+    private static void ShowVisitMenu(int page)
     {
         string? home = HomeFarmOf(Game1.player);
-        var responses = new List<Response>();
-        if (home != null)
-            responses.Add(new Response(home, $"Home ({DisplayName(home)})"));
-        // With a farm per player the full list gets long: show farms with someone online now (busiest first).
-        var online = Game1.getOnlineFarmers().Where(f => !f.IsMainPlayer).ToList();
-        foreach (var group in online.GroupBy(f => HomeFarmOf(f)).Where(g => g.Key != null && g.Key != home)
-                     .OrderByDescending(g => g.Count()).Take(6))
-            responses.Add(new Response(group.Key!, $"{DisplayName(group.Key!)}: {string.Join(", ", group.Select(m => m.Name))}"));
-        responses.Add(new Response("cancel", "Never mind"));
-        Game1.currentLocation.createQuestionDialogue("Which farm do you want to go to?", responses.ToArray(), (who, answer) =>
+        bool owner = home != null && FarmSettings.IsOwner(Game1.player, home);
+        if (owner && page == 0 && !NamingDeclined && FarmSettings.ChosenName(home!) == null)
         {
-            if (answer != "cancel" && Game1.getLocationFromName(answer) != null)
-                Game1.warpFarmer(answer, RoadEntry.X, RoadEntry.Y, 3);
+            // First visit to the board as an owner: name the farm (once; /farmname in Discord renames it later).
+            Game1.currentLocation.createQuestionDialogue($"Your farm is called {DisplayName(home!)} for now. Want to give it a name?",
+                new[] { new Response("name", "Name my farm"), new Response("later", "Not now") }, (who, answer) =>
+                {
+                    if (answer == "name")
+                        Later(() => FarmSettings.AskForName(home!));
+                    else
+                    {
+                        NamingDeclined = true;
+                        Later(() => ShowFarmList(0, home, owner));
+                    }
+                });
+            return;
+        }
+        ShowFarmList(page, home, owner);
+    }
+
+    private static void ShowFarmList(int page, string? home, bool owner)
+    {
+        var onlineByFarm = Game1.getOnlineFarmers().Where(f => !f.IsMainPlayer).GroupBy(HomeFarmOf)
+            .Where(g => g.Key != null).ToDictionary(g => g.Key!, g => g.Count());
+        var farms = AllNames
+            .Where(f => f != home && FarmRoster.HasMembers(f) && !FarmSettings.IsClosed(f))
+            .OrderByDescending(f => onlineByFarm.GetValueOrDefault(f)).ThenBy(DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        int pages = Math.Max(1, (farms.Count + FarmsPerPage - 1) / FarmsPerPage);
+        page = Math.Clamp(page, 0, pages - 1);
+
+        var responses = new List<Response>();
+        if (home != null && page == 0)
+            responses.Add(new Response("go:" + home, $"Home ({DisplayName(home)})"));
+        foreach (string f in farms.Skip(page * FarmsPerPage).Take(FarmsPerPage))
+        {
+            int here = onlineByFarm.GetValueOrDefault(f);
+            string who = FarmSettings.OwnerName(f) is { } o ? $"{o}'s" : "";
+            string label = DisplayName(f) + (who.Length > 0 || here > 0
+                ? " (" + string.Join(", ", new[] { who, here > 0 ? $"{here} here now" : "" }.Where(s => s.Length > 0)) + ")"
+                : "");
+            responses.Add(new Response("go:" + f, label));
+        }
+        if (page + 1 < pages)
+            responses.Add(new Response("page:" + (page + 1), "More farms..."));
+        else if (page > 0)
+            responses.Add(new Response("page:0", "Back to the start"));
+        if (owner && page == 0)
+            responses.Add(new Response("mine", "My farm's settings..."));
+        responses.Add(new Response("cancel", "Never mind"));
+
+        string question = farms.Count == 0 ? "No other farms are open to visitors yet." : "Which farm do you want to go to?";
+        if (pages > 1)
+            question += $" (page {page + 1} of {pages})";
+        Game1.currentLocation.createQuestionDialogue(question, responses.ToArray(), (who, answer) =>
+        {
+            if (answer.StartsWith("go:"))
+                Visit(answer[3..]);
+            else if (answer.StartsWith("page:") && int.TryParse(answer[5..], out int p))
+                Later(() => ShowFarmList(p, home, owner));
+            else if (answer == "mine" && home != null)
+                Later(() => ShowMyFarm(home));
         });
     }
+
+    private static void ShowMyFarm(string home)
+    {
+        bool closed = FarmSettings.IsClosed(home);
+        var responses = new List<Response>();
+        if (FarmSettings.ChosenName(home) == null)
+            responses.Add(new Response("name", "Name my farm"));
+        responses.Add(closed ? new Response("open", "Open my farm to visitors") : new Response("close", "Close my farm to visitors"));
+        responses.Add(new Response("cancel", "Never mind"));
+        string state = closed ? "closed to visitors" : "open to visitors";
+        string rename = FarmSettings.ChosenName(home) != null ? " To rename it, use /farmname in Discord." : "";
+        Game1.currentLocation.createQuestionDialogue($"{DisplayName(home)} is {state}.{rename}", responses.ToArray(), (who, answer) =>
+        {
+            if (answer == "name")
+                Later(() => FarmSettings.AskForName(home));
+            else if (answer is "open" or "close")
+                FarmSettings.SetVisits(home, answer == "close");
+        });
+    }
+
+    private static void Visit(string farm)
+    {
+        if (Game1.getLocationFromName(farm) == null)
+            return;
+        if (farm != HomeFarmOf(Game1.player) && FarmSettings.IsClosed(farm))
+        {
+            Game1.addHUDMessage(new HUDMessage($"{DisplayName(farm)} is closed to visitors.", HUDMessage.error_type));
+            return;
+        }
+        Game1.warpFarmer(farm, RoadEntry.X, RoadEntry.Y, 3);
+    }
+
+    /// <summary>Back to the bus stop, in front of the notice board.</summary>
+    public static void LeaveToBusStop() => Game1.warpFarmer("BusStop", VisitBoard.X + 1, VisitBoard.Y + 2, 2);
+
+    /// <summary>Open the next menu after the current dialogue has closed.</summary>
+    private static void Later(Action next) => DelayedAction.functionAfterDelay(next, 100);
 
     private static bool greeted;
     private static void Greet(object? sender, OneSecondUpdateTickedEventArgs e)
@@ -326,6 +426,8 @@ internal static class Farms
         var mates = MembersOf(home).Where(f => f.UniqueMultiplayerID != Game1.player.UniqueMultiplayerID).Select(f => f.Name).ToList();
         Game1.chatBox.addInfoMessage($"You live on {DisplayName(home)}" + (mates.Count > 0 ? $" with {string.Join(", ", mates)}." : "."));
         Game1.chatBox.addInfoMessage("To visit other farms, check the notice board by the farm road at the bus stop.");
+        if (FarmSettings.IsOwner(Game1.player, home) && FarmSettings.ChosenName(home) == null)
+            Game1.chatBox.addInfoMessage("You can name your farm at that notice board too.");
     }
 
     // ---------- look, don't touch ----------

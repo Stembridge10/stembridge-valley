@@ -42,6 +42,12 @@ internal static class FarmRoster
 
     public static string? FarmOfKey(string key) => members.FirstOrDefault(kv => kv.Value.Contains(key)).Key;
 
+    /// <summary>Someone lives on this farm. Players' games know this from the farm's owner (sent with the farm).</summary>
+    public static bool HasMembers(string farm) => SV.Role == Role.Server ? Members(farm).Count > 0 : FarmSettings.OwnerOf(farm) != null;
+
+    /// <summary>Tell the Discord bot right away (after a rename or visit change).</summary>
+    public static void Refresh() => WriteStatus();
+
     /// <summary>Always keep one farm nobody belongs to yet, so the next new player gets theirs instantly.</summary>
     public static void KeepOneEmptyFarm()
     {
@@ -224,6 +230,8 @@ internal static class FarmRoster
         var status = Farms.AllNames.ToDictionary(f => f, f => new
         {
             name = Farms.DisplayName(f),
+            named = FarmSettings.ChosenName(f) != null,
+            closed = FarmSettings.IsClosed(f),
             members = Members(f).Select(k => new { key = k, started = started.Contains(k) }).ToList(),
         });
         string json = JsonSerializer.Serialize(status, new JsonSerializerOptions { WriteIndented = true });

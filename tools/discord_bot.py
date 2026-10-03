@@ -5,6 +5,8 @@
                     A new player gets a farm of their own.
 /invite @friend  -> puts a friend (who hasn't made a farmer yet) on your farm, up to 4 people.
 /farm            -> who lives on your farm.
+/farmname NAME   -> owner renames their farm (first name is picked in game at the bus stop notice board).
+/visitors open|closed -> owner opens or closes their farm to visitors.
 /newcode         -> replaces your code (if you think someone else saw it).
 
 Writes the game server's discord-players.json:
@@ -18,7 +20,7 @@ Config (environment):
   SV_PUBLIC_ADDRESS  host:port players connect to
   SV_GUILD_ID        optional: only answer in this Discord server
 """
-import json, logging, os, secrets, tempfile
+import json, logging, os, re, secrets, tempfile, time
 from pathlib import Path
 
 import discord
@@ -31,6 +33,8 @@ log = logging.getLogger("svbot")
 STATE = Path(os.environ["SV_STATE_DIR"])
 ROSTER = STATE / "discord-players.json"
 FARMS = STATE / "farm-status.json"
+SETTINGS = STATE / "farm-settings.json"
+NAME_MAX = 20
 FARM_SIZE = 4
 ADDRESS = os.environ["SV_PUBLIC_ADDRESS"]
 GUILD_ID = int(os.environ.get("SV_GUILD_ID") or 0) or None
@@ -225,6 +229,87 @@ async def newcode(inter: discord.Interaction):
     await inter.response.send_message(
         f"Your new code (the old one no longer works):\n```{code(str(inter.user.id), tok)}```\nPaste it into the launcher when it asks.",
         ephemeral=True)
+
+
+def clean_name(raw):
+    """Same rules as the game (the game checks again): 2-20 letters/numbers/spaces/'/-, trailing "Farm" dropped.
+    Anything else in it means it's refused."""
+    s = re.sub(r"\s+", " ", raw or "").strip()
+    if re.search(r"[^\w '\-]", s, flags=re.UNICODE) or "_" in s:
+        return None
+    s = re.sub(r"\s*farm$", "", s, flags=re.IGNORECASE).strip()
+    if len(s) < 2 or len(s) > NAME_MAX or not any(c.isalpha() for c in s):
+        return None
+    return s
+
+
+def request_setting(fid, uid, **changes):
+    """Ask the game server to change a farm setting (it checks the owner again and applies it within a second or two)."""
+    try:
+        all_ = json.loads(SETTINGS.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        all_ = {}
+    entry = all_.get(fid, {})
+    entry.update(changes)
+    entry["by"] = f"discord-{uid}"
+    entry["seq"] = int(time.time() * 1000)
+    all_[fid] = entry
+    fd, tmp = tempfile.mkstemp(dir=STATE, prefix=".farm-settings.")
+    with os.fdopen(fd, "w") as f:
+        json.dump(all_, f, indent=2)
+    os.chmod(tmp, 0o640)
+    os.replace(tmp, SETTINGS)
+
+
+def owned_farm(uid):
+    """(farm id, farm) if this Discord user owns a farm (founded it), else (None, reason)."""
+    fid, farm, me = farm_of(uid)
+    if not farm or not me["started"]:
+        return None, "You don't have a farm yet: type **/play** and join the game."
+    if farm["members"][0]["key"] != f"discord-{uid}":
+        return None, f"Only **{farm['name']}**'s owner ({name_of(load(), farm['members'][0]['key'])}) can do that."
+    return fid, farm
+
+
+@tree.command(name="farmname", description="Rename your farm (owners only).")
+@app_commands.describe(name='New name, e.g. "Sunny Acres" (shows as "Sunny Acres Farm").')
+async def farmname(inter: discord.Interaction, name: str):
+    if not allowed(inter):
+        await inter.response.send_message("Use this in the Stembridge Valley Discord server.", ephemeral=True)
+        return
+    fid, farm = owned_farm(inter.user.id)
+    if not fid:
+        await inter.response.send_message(farm, ephemeral=True)
+        return
+    clean = clean_name(name)
+    if not clean:
+        await inter.response.send_message(f"Names are 2-{NAME_MAX} letters, numbers, spaces, ' or -.", ephemeral=True)
+        return
+    shown = f"{clean} Farm"
+    if any(f["name"].lower() == shown.lower() for k, f in farms().items() if k != fid):
+        await inter.response.send_message(f"**{shown}** is already taken.", ephemeral=True)
+        return
+    request_setting(fid, inter.user.id, name=clean)
+    await inter.response.send_message(f"**{farm['name']}** is now **{shown}**. Everyone sees the new name in a few seconds.", ephemeral=True)
+    log.info("%s renamed %s to %s", inter.user.id, fid, clean)
+
+
+@tree.command(name="visitors", description="Open or close your farm to visitors (owners only).")
+@app_commands.describe(setting="Open: anyone can look around (they can't change anything). Closed: only your farm's members.")
+@app_commands.choices(setting=[app_commands.Choice(name="open", value="open"), app_commands.Choice(name="closed", value="closed")])
+async def visitors(inter: discord.Interaction, setting: app_commands.Choice[str]):
+    if not allowed(inter):
+        await inter.response.send_message("Use this in the Stembridge Valley Discord server.", ephemeral=True)
+        return
+    fid, farm = owned_farm(inter.user.id)
+    if not fid:
+        await inter.response.send_message(farm, ephemeral=True)
+        return
+    request_setting(fid, inter.user.id, visits=setting.value)
+    msg = ("open to visitors. They can look around but can't change anything." if setting.value == "open"
+           else "closed to visitors. Anyone visiting is sent back to the bus stop.")
+    await inter.response.send_message(f"**{farm['name']}** is now {msg}", ephemeral=True)
+    log.info("%s set %s visitors %s", inter.user.id, fid, setting.value)
 
 
 @client.event

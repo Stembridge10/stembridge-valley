@@ -57,6 +57,8 @@ internal static class Bot
             return;
         if (Environment.GetEnvironmentVariable("SV_BOT_GATE_CHECK") == "1" && GateCheck())
             return;
+        if (Environment.GetEnvironmentVariable("SV_BOT_SETTINGS") is { Length: > 0 } role && SettingsCheck(role))
+            return;
 
         nextActionTick = (int)e.Ticks + rng.Next(180, 480); // every 3-8 seconds
         actions++;
@@ -77,6 +79,78 @@ internal static class Bot
 
     private static int doorStage, doorWait;
     private static int gateStage, gateWait;
+    private static int setStage, setWait;
+
+    /// <summary>What the notice board shows this player right now (opens it, reads it, closes it).</summary>
+    private static string ReadBoard()
+    {
+        Farms.ShowVisitMenu();
+        string text = Game1.activeClickableMenu is DialogueBox box
+            ? box.getCurrentString() + " | " + string.Join(" | ", box.responses.Select(r => r.responseText))
+            : "(no menu)";
+        (Game1.activeClickableMenu as DialogueBox)?.closeDialogue();
+        Game1.activeClickableMenu = null;
+        return text;
+    }
+
+    /// <summary>
+    /// Test of farm names and visits (SV_BOT_SETTINGS=owner|visitor; one step every ~3 seconds).
+    /// owner: reads the board (naming prompt), sends a bad name, a good name, a second name (refused: once only),
+    ///        then waits for SV_BOT_CLOSE_AT step and closes the farm to visitors.
+    /// visitor: reads the board, visits the farm named in SV_BOT_VISIT, and reports where it is each step
+    ///          (so being sent out when it closes shows up), then reads the board again and tries to visit.
+    /// </summary>
+    private static bool SettingsCheck(string role)
+    {
+        if (Game1.activeClickableMenu != null && Game1.activeClickableMenu is not DialogueBox)
+            return true;
+        if (++setWait < 180)
+            return true;
+        setWait = 0;
+        setStage++;
+        string? home = Farms.HomeFarmOf(Game1.player);
+        string where = Game1.currentLocation?.Name ?? "-";
+        Log.Info($"[settings] {role} step {setStage} at {where}; home {home} = {(home != null ? Farms.DisplayName(home) : "-")}");
+        if (role == "owner" && home != null)
+        {
+            int closeAt = int.TryParse(Environment.GetEnvironmentVariable("SV_BOT_CLOSE_AT"), out int c) ? c : 12;
+            switch (setStage)
+            {
+                case 1: Log.Info($"[settings] board: {ReadBoard()}"); break;
+                case 2: FarmSettings.RequestNameForTest(home, "<b>!!</b>"); break;           // refused: no letters left
+                case 3: FarmSettings.RequestNameForTest(home, "Sunny Acres farm"); break;    // becomes "Sunny Acres Farm"
+                case 5: Log.Info($"[settings] board after naming: {ReadBoard()}"); break;
+                case 6: FarmSettings.RequestNameForTest(home, "Second Try"); break;          // refused: in game it's once only
+                case 8: Log.Info($"[settings] name now {Farms.DisplayName(home)}"); break;
+            }
+            if (setStage == closeAt)
+            {
+                Log.Info("[settings] closing my farm to visitors");
+                FarmSettings.SetVisits(home, true);
+            }
+        }
+        else if (role == "visitor")
+        {
+            string ownerName = Environment.GetEnvironmentVariable("SV_BOT_VISIT") ?? "";
+            string target = Farms.AllNames.FirstOrDefault(f => FarmSettings.OwnerName(f) == ownerName) ?? "SV_Farm2";
+            switch (setStage)
+            {
+                case 1:
+                    Log.Info($"[settings] board: {ReadBoard()}");
+                    Farms.NamingDeclined = true; // as if "Not now" was picked
+                    Log.Info($"[settings] board after Not now: {ReadBoard()}");
+                    break;
+                case 9:
+                    Log.Info($"[settings] board: {ReadBoard()}");
+                    Game1.warpFarmer(target, Farms.RoadEntry.X, Farms.RoadEntry.Y, 3);
+                    break;
+                case 26:
+                    Log.Info($"[settings] board after close: {ReadBoard()}");
+                    break;
+            }
+        }
+        return true;
+    }
 
     /// <summary>Test: go stand below the visit gate at the bus stop, click it, and report what opens. Stays there for a screenshot.</summary>
     private static bool GateCheck()
