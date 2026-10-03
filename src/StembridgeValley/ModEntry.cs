@@ -38,6 +38,7 @@ internal sealed class ModEntry : Mod
         FarmSettings.Apply(helper);
         Skills.Apply(helper, harmony);
         Quarry.Apply(helper, harmony);
+        SkillPerks.Apply(helper, harmony);
         if (SV.Role == Role.Server)
         {
             Server.Apply(helper, harmony);
