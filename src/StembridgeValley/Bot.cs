@@ -99,6 +99,7 @@ internal static class Bot
                 var b2 = Game1.currentLocation?.buildings.Where(x => x.isCabin).OrderBy(x => x.tileX.Value)
                     .Select(x => $"{x.tileX.Value},{x.tileY.Value}");
                 Log.Info($"[doorcheck] cabins here: {string.Join(" ", b2 ?? Array.Empty<string>())}");
+                Log.Info($"[doorcheck] mailbox bubble at {Game1.player.getMailboxPosition().X},{Game1.player.getMailboxPosition().Y}; own cabin mailbox {string.Join(" ", Game1.currentLocation!.buildings.Where(b => b.isCabin && b.HasIndoorsName(Game1.player.homeLocation.Value)).Select(b => $"{b.getMailboxPosition().X},{b.getMailboxPosition().Y}"))}");
                 Game1.game1.takeMapScreenshot(0.25f, "cabin-row", () => Log.Info("[doorcheck] screenshot saved"));
                 doorStage = 2;
                 return true;

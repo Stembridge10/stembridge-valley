@@ -68,6 +68,8 @@ internal static class Farms
             prefix: new HarmonyMethod(typeof(Farms), nameof(WarpFarmer_Prefix)));
         harmony.Patch(AccessTools.Method(typeof(FarmHouse), nameof(FarmHouse.getFrontDoorSpot)),
             postfix: new HarmonyMethod(typeof(Farms), nameof(FrontDoor_Postfix)));
+        harmony.Patch(AccessTools.Method(typeof(Farmer), nameof(Farmer.getMailboxPosition)),
+            postfix: new HarmonyMethod(typeof(Farms), nameof(MailboxPosition_Postfix)));
         harmony.Patch(AccessTools.Method(typeof(Farm), nameof(Farm.IsBuildableLocation)),
             postfix: new HarmonyMethod(typeof(Farms), nameof(IsBuildable_Postfix)));
 
@@ -222,6 +224,29 @@ internal static class Farms
     {
         if (__instance is Cabin { ParentBuilding: { } b })
             __result = new Point(b.tileX.Value + b.humanDoor.X, b.tileY.Value + b.humanDoor.Y + 1);
+    }
+
+    /// <summary>
+    /// The "you've got mail" bubble floats over your cabin's mailbox. Vanilla only looks for cabins on the main farm,
+    /// so on our farms it fell back to where the (removed) farmhouse mailbox was. Only drawn on your own farm.
+    /// </summary>
+    private static void MailboxPosition_Postfix(Farmer __instance, ref Point __result)
+    {
+        if (!Enabled || HomeFarmOf(__instance) is not string home)
+            return;
+        GameLocation? here = Game1.currentLocation;
+        if (here?.Name != home)
+        {
+            if (IsFarm(here))
+                __result = new Point(-100, -100); // someone else's farm: no bubble
+            return;
+        }
+        foreach (Building b in here.buildings)
+            if (b.isCabin && b.HasIndoorsName(__instance.homeLocation.Value))
+            {
+                __result = b.getMailboxPosition();
+                return;
+            }
     }
 
     /// <summary>Robin offers to build only on your own farm.</summary>
