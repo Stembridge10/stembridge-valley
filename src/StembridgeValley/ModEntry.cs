@@ -41,6 +41,8 @@ internal sealed class ModEntry : Mod
         Pets.Apply(helper, harmony);
         Quarry.Apply(helper, harmony);
         SkillPerks.Apply(helper, harmony);
+        StarterSeeds.Apply(harmony);
+        TestKit.Apply(helper);
         if (SV.Role == Role.Server)
         {
             Server.Apply(helper, harmony);

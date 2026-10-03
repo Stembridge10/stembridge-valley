@@ -88,7 +88,15 @@ a full year in under 5 real days. Nobody plays 24 hours a day, so:
 
 ## Ideas log (fun at 1 player or 20)
 Every loop must work solo and scale with more people. Candidates, not yet approved:
-- (add as found)
+- **Skillcape at 50** (OSRS): a hat/cape item per skill, with the owner's name on the item tooltip. Easy; mostly art.
+- **Level-up fireworks** (OSRS): a small burst over a player when they level past 10, seen by everyone nearby.
+- **Farm visitors' book**: the farm sign keeps the last 10 visitors' names, so owners see who stopped by.
+- **Daily login streak**: a small mailbox gift for each day in a row someone plays (seeds, bait, coal); resets, never punishes.
+- **"First to" server firsts**: Discord announcement and a permanent line on the hiscores the first time anyone catches a
+  legendary, reaches level 50, or finds a pet.
+- **Farm-type perks shown in the picker**: each map's bonus listed on the button (Riverland fish, Forest forage...). Partly
+  done: the picker shows a one-line description.
+- **Shared quarry visits**: farm members can bring a visitor into their quarry (read-only, like the farm).
 
 ## Example: four friends join (Maya, Jake, Sam, Lee)
 Server has run a few weeks. Three farms exist; it's Fall, Year 3. The Pantry town project is already done.
