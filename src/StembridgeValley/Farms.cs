@@ -101,7 +101,7 @@ internal static class Farms
         {
             int x = VisitBoard.X + 1, y = VisitBoard.Y; // middle of the board
             float bob = 4f * (float)Math.Round(Math.Sin(Game1.currentGameTime.TotalGameTime.TotalMilliseconds / 250.0), 2);
-            Vector2 bubble = new(x * 64 - 8, y * 64 - 216 + bob);
+            Vector2 bubble = new(x * 64 - 8, y * 64 - 128 + bob);
             b.Draw(Game1.mouseCursors, Game1.GlobalToLocal(Game1.viewport, bubble), new Microsoft.Xna.Framework.Rectangle(141, 465, 20, 24),
                 Color.White * 0.9f, 0f, Vector2.Zero, 4f, Microsoft.Xna.Framework.Graphics.SpriteEffects.None, 0.99f);
             b.Draw(Game1.mouseCursors, Game1.GlobalToLocal(Game1.viewport, bubble + new Vector2(12, 8)), new Microsoft.Xna.Framework.Rectangle(448, 64, 32, 36),
