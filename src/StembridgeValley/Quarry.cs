@@ -216,27 +216,45 @@ internal static class Quarry
         void Set(Layer layer, int x, int y, int? index) =>
             layer.Tiles[x, y] = index is int i ? new StaticTile(layer, s, BlendMode.Alpha, i) : null;
 
-        for (int y = 42; y <= 47; y++)
-            for (int x = 0; x <= 2; x++)
-            {
-                Set(back, x, y, 587);
-                Set(buildings, x, y, null);
-                Set(front, x, y, null);
-            }
-        Set(back, 0, 41, 351); Set(back, 1, 41, 352); Set(back, 2, 41, 176);
-        Set(buildings, 0, 41, 16); Set(buildings, 1, 41, 16); Set(buildings, 2, 41, 444);
-        Set(buildings, 0, 42, 468); Set(buildings, 1, 42, 468); Set(buildings, 2, 42, 469);
-        Set(buildings, 0, 43, 493); Set(buildings, 1, 43, 493); Set(buildings, 2, 43, 494);
+        // A gap in the left bank, edged like the farm's north wall: a tall rock face with grass on top above the
+        // path (the little tree moved up onto the grass), and the bank's grass lip below. Matches the preview
+        // tiles exactly (left_edits_rock2.json).
+        Set(back, 0, 40, 587); Set(back, 1, 40, 587); Set(back, 2, 40, 587);
+        Set(back, 0, 41, 587); Set(back, 1, 41, 587); Set(back, 2, 41, 587);
+        Set(back, 0, 42, 587); Set(back, 1, 42, 587); Set(back, 2, 42, 587);
+        Set(back, 0, 43, 587); Set(back, 1, 43, 587); Set(back, 2, 43, 587);
+        Set(back, 0, 44, 562); Set(back, 1, 44, 512); Set(back, 2, 44, 618);
+        Set(back, 0, 45, 587); Set(back, 1, 45, 587); Set(back, 2, 45, 587);
+        Set(back, 0, 46, 587); Set(back, 1, 46, 587); Set(back, 2, 46, 587);
+        Set(back, 0, 47, 587); Set(back, 1, 47, 587); Set(back, 2, 47, 587);
+        Set(back, 2, 48, 175);
+        Set(buildings, 0, 36, 16); Set(buildings, 1, 36, 16);
+        Set(buildings, 0, 37, 16); Set(buildings, 1, 37, 16);
+        Set(buildings, 0, 38, 16); Set(buildings, 1, 38, 16);
+        Set(buildings, 0, 39, 16); Set(buildings, 1, 39, 16); Set(buildings, 2, 39, 444);
+        Set(buildings, 0, 40, 468); Set(buildings, 1, 40, 468); Set(buildings, 2, 40, 469);
+        Set(buildings, 0, 41, 493); Set(buildings, 1, 41, 492); Set(buildings, 2, 41, 494);
+        Set(buildings, 0, 42, 518); Set(buildings, 1, 42, 517); Set(buildings, 2, 42, 519);
+        Set(buildings, 0, 43, 543); Set(buildings, 1, 43, 542); Set(buildings, 2, 43, 544);
+        Set(buildings, 0, 44, null); Set(buildings, 1, 44, null); Set(buildings, 2, 44, null);
+        Set(buildings, 0, 45, null); Set(buildings, 1, 45, null); Set(buildings, 2, 45, null);
+        Set(buildings, 0, 46, null); Set(buildings, 1, 46, null); Set(buildings, 2, 46, null);
+        Set(buildings, 0, 47, null); Set(buildings, 1, 47, null); Set(buildings, 2, 47, null);
+        Set(buildings, 2, 48, 394);
+        Set(front, 0, 34, 4); Set(front, 1, 34, 5);
+        Set(front, 0, 35, 29); Set(front, 1, 35, 30);
+        Set(front, 0, 36, 54); Set(front, 1, 36, 55);
+        Set(front, 0, 37, 79); Set(front, 1, 37, 80);
+        Set(front, 0, 38, 104); Set(front, 1, 38, 105);
+        Set(front, 0, 39, 129); Set(front, 1, 39, 130);
+        Set(front, 0, 40, null); Set(front, 1, 40, null); Set(front, 2, 40, null);
+        Set(front, 0, 41, null); Set(front, 1, 41, null); Set(front, 2, 41, null);
+        Set(front, 0, 42, null); Set(front, 1, 42, null); Set(front, 2, 42, null);
+        Set(front, 0, 43, null); Set(front, 1, 43, null); Set(front, 2, 43, null);
+        Set(front, 0, 44, null); Set(front, 1, 44, null); Set(front, 2, 44, null);
+        Set(front, 0, 45, null); Set(front, 1, 45, null); Set(front, 2, 45, null);
+        Set(front, 0, 46, null); Set(front, 1, 46, null); Set(front, 2, 46, null);
         Set(front, 0, 47, 413); Set(front, 1, 47, 414); Set(front, 2, 47, 438);
-        Set(back, 2, 48, 175); Set(buildings, 2, 48, 394);
-
-        // Soften the cut: leafy canopies (the farm's own tree-line pieces) hang over both corners of the opening,
-        // so it reads as a path through the trees rather than a square notch.
-        if (map.GetLayer("AlwaysFront") is { } over)
-            foreach (int top in new[] { 40, 47 })
-                for (int i = 0; i < 4; i++)
-                    for (int r = 0; r < 4; r++)
-                        Set(over, i, top + r, 18 + i + 25 * r);
     }
 
     /// <summary>Server: the farm's left edge leads to its quarry; the quarry's right edge leads back.</summary>
