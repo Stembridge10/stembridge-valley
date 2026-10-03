@@ -41,8 +41,8 @@ internal static class Farms
 
     /// <summary>Test worlds only: SV_TEST_FARM_MAP=Farm_Ranching makes new farms use that farm map (until the
     /// farm-map picker exists). Never set on the live server.</summary>
-    private static readonly string? TestFarmMap =
-        Environment.GetEnvironmentVariable("SV_TEST_FARM_MAP") is { Length: > 0 } m ? "Maps\\" + m : null;
+    public static readonly string? TestFarmMapName =
+        Environment.GetEnvironmentVariable("SV_TEST_FARM_MAP") is { Length: > 0 } m ? m : null;
 
     /// <summary>Left tile of the 3-wide visit-a-farm notice board in the bus stop's farm-road fence.</summary>
     private static readonly Point VisitBoard = new(14, 21);
@@ -145,7 +145,7 @@ internal static class Farms
                     entry.DisplayName = DefaultName(name);
                     entry.DefaultArrivalTile = RoadEntry;
                     entry.CreateOnLoad = server
-                        ? new CreateLocationData { MapPath = TestFarmMap ?? "Maps\\Farm", Type = "StardewValley.Farm", AlwaysActive = true }
+                        ? new CreateLocationData { MapPath = "Maps\\Farm" /* FarmMaps sets each farm's own map */, Type = "StardewValley.Farm", AlwaysActive = true }
                         : new CreateLocationData { MapPath = "Maps\\Cellar", AlwaysActive = false };
                     data[name] = entry;
                 }
@@ -200,6 +200,7 @@ internal static class Farms
         Server.BuildCabin(farm, 0); // one cabin; another is added beside it for each invited friend
         farm.modData["SV.CabinsInRow"] = "1";
         GameLocation quarry = Quarry.EnsureQuarry(name);
+        FarmMaps.Label(); // waits for its owner to pick a map
         FarmRoster.Load(); // gives it an invite code
         Server.SetPlayerLimit();
         var send = AccessTools.Method(typeof(GameServer), "sendLocation");
@@ -260,14 +261,18 @@ internal static class Farms
 
     // ---------- warps ----------
 
-    /// <summary>Anything that sends a player to "the farm" sends them to their own farm instead.</summary>
-    private static void WarpFarmer_Prefix(ref LocationRequest locationRequest)
+    /// <summary>
+    /// Anything that sends a player to "the farm" sends them to their own farm instead, and arriving on a farm from
+    /// the bus stop, forest, backwoods or cave puts you at that farm map's own entrance.
+    /// </summary>
+    private static void WarpFarmer_Prefix(ref LocationRequest locationRequest, ref int tileX, ref int tileY)
     {
-        if (Game1.player == null || Game1.player.IsMainPlayer || locationRequest?.Name != "Farm")
+        if (Game1.player == null || Game1.player.IsMainPlayer || locationRequest == null)
             return;
-        string? home = HomeFarmOf(Game1.player);
-        if (home != null)
+        if (locationRequest.Name == "Farm" && HomeFarmOf(Game1.player) is string home)
             locationRequest = Game1.getLocationRequest(home);
+        if (locationRequest.Name.StartsWith(Prefix, StringComparison.Ordinal) && Game1.getLocationFromName(locationRequest.Name) is { } farm && IsFarm(farm))
+            FarmMaps.AdjustArrival(farm, ref tileX, ref tileY);
     }
 
     /// <summary>Leaving a cabin puts you at its door, wherever the cabin is.</summary>
@@ -325,6 +330,11 @@ internal static class Farms
     {
         string? home = HomeFarmOf(Game1.player);
         bool owner = home != null && FarmSettings.IsOwner(Game1.player, home);
+        if (owner && page == 0 && FarmMaps.IsPending(Game1.getLocationFromName(home!)))
+        {
+            FarmMaps.ShowPicker(home!); // the farm's map comes first
+            return;
+        }
         if (owner && page == 0 && !NamingDeclined && FarmSettings.ChosenName(home!) == null)
         {
             // First visit to the board as an owner: name the farm (once; /farmname in Discord renames it later).
@@ -417,7 +427,8 @@ internal static class Farms
             Game1.addHUDMessage(new HUDMessage($"{DisplayName(farm)} is closed to visitors.", HUDMessage.error_type));
             return;
         }
-        Game1.warpFarmer(farm, RoadEntry.X, RoadEntry.Y, 3);
+        Point entry = FarmMaps.RoadEntryOf(Game1.getLocationFromName(farm));
+        Game1.warpFarmer(farm, entry.X, entry.Y, 3);
     }
 
     /// <summary>Back to the bus stop, in front of the notice board.</summary>

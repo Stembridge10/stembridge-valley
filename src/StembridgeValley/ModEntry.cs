@@ -34,6 +34,7 @@ internal sealed class ModEntry : Mod
         Rules.Apply(helper, harmony);
         Network.Apply(harmony);
         Farms.Apply(helper, harmony);
+        FarmMaps.Apply(helper, harmony);
         FarmSettings.Apply(helper);
         Skills.Apply(helper, harmony);
         Quarry.Apply(helper, harmony);

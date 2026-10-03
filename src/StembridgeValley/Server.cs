@@ -170,6 +170,7 @@ internal static class Server
         if (Farms.Enabled)
         {
             FarmRoster.Load();
+            FarmMaps.OnServerLoaded(); // needs the members: farms people live on keep their map
             FarmRoster.TrimSpareCabins();
             FarmRoster.EnsureCabins();
             AlignCabins();
@@ -226,7 +227,7 @@ internal static class Server
         // Player farms: cabins stand side by side in one row where the farmhouse would be (first free slot in the row).
         IEnumerable<Vector2> spots = CabinSpots(farm);
         if (Farms.IsFarm(farm))
-            spots = Enumerable.Range(0, Farms.PlayersPerFarm).Select(RowSpot).Concat(spots);
+            spots = Enumerable.Range(0, Farms.PlayersPerFarm).Select(i => RowSpot(farm, i)).Concat(spots);
         foreach (var tile in spots)
         {
             if (!SpotIsClear(farm, tile))
@@ -318,10 +319,55 @@ internal static class Server
         var pixels = new Rectangle(area.X * 64, area.Y * 64, area.Width * 64, area.Height * 64);
         farm.resourceClumps.RemoveWhere(r => r.getBoundingBox().Intersects(pixels));
         farm.largeTerrainFeatures.RemoveWhere(l => l.getBoundingBox().Intersects(pixels));
+        // A grown tree's leaves reach three tiles up, so wild trees just below would hide the door.
+        for (int x = area.Left; x < area.Right; x++)
+            for (int y = area.Bottom; y < area.Bottom + 3; y++)
+                if (farm.terrainFeatures.TryGetValue(new Vector2(x, y), out var tf)
+                    && tf is StardewValley.TerrainFeatures.Tree { tapped.Value: false, fertilized.Value: false })
+                    farm.terrainFeatures.Remove(new Vector2(x, y));
     }
 
-    /// <summary>Cabin slot in the row: four cabins, two tiles apart, on the open ground below where the farmhouse would be.</summary>
-    private static Vector2 RowSpot(int index) => new(49 + index * 7, 19);
+    /// <summary>
+    /// Cabin slot in the row: four cabins, two tiles apart, on the open ground below where the farmhouse would be
+    /// (49,19 on the Standard farm; other farm maps put their farmhouse elsewhere).
+    /// </summary>
+    private static Vector2 RowSpot(GameLocation farm, int index)
+    {
+        Point house = farm is Farm f ? f.GetMainFarmHouseEntry() : new Point(64, 15);
+        return new(house.X - 15 + index * 7, house.Y + 4);
+    }
+
+    /// <summary>
+    /// After a farm changes map: move its cabins (and everything inside) to the new map's farmhouse area, the row
+    /// first, else the nearest clear ground. Cabins are moved, not rebuilt.
+    /// </summary>
+    internal static void RelineCabins(GameLocation farm)
+    {
+        var cabins = farm.buildings.Where(b => b.isCabin).OrderBy(b => b.tileX.Value).ThenBy(b => b.tileY.Value).ToList();
+        var taken = new List<Rectangle>();
+        foreach (var cabin in cabins)
+        {
+            var spots = Enumerable.Range(0, Farms.PlayersPerFarm).Select(i => RowSpot(farm, i)).Concat(CabinSpots(farm));
+            bool moved = false;
+            foreach (Vector2 t in spots)
+            {
+                var room = new Rectangle((int)t.X - 1, (int)t.Y - 1, CabinW + 2, CabinH + 3);
+                if (taken.Any(r => r.Intersects(room)) || WhyNotClear(farm, t, ignoreCabins: true) != null)
+                    continue;
+                ClearSpot(farm, t);
+                cabin.tileX.Value = (int)t.X;
+                cabin.tileY.Value = (int)t.Y;
+                cabin.updateInteriorWarps();
+                taken.Add(room);
+                moved = true;
+                break;
+            }
+            if (!moved)
+                Log.Warn($"No room for a cabin on {farm.Name} after its map changed.");
+        }
+        farm.modData["SV.CabinsInRow"] = "1";
+        Log.Info($"Moved {cabins.Count} cabin(s) on {farm.Name} to its new map.");
+    }
 
     /// <summary>
     /// Line up the cabins on each 4-player farm (once per farm; afterwards players may move them with Robin).
@@ -337,10 +383,10 @@ internal static class Server
             var cabins = farm.buildings.Where(b => b.isCabin).OrderBy(b => b.tileX.Value).ThenBy(b => b.tileY.Value).ToList();
             if (cabins.Count == 0 || cabins.Count > Farms.PlayersPerFarm || farm.farmers.Any())
                 continue;
-            bool inRow = cabins.Select((b, i) => b.tileX.Value == (int)RowSpot(i).X && b.tileY.Value == (int)RowSpot(i).Y).All(ok => ok);
+            bool inRow = cabins.Select((b, i) => b.tileX.Value == (int)RowSpot(farm, i).X && b.tileY.Value == (int)RowSpot(farm, i).Y).All(ok => ok);
             if (!inRow)
             {
-                string? why = cabins.Select((_, i) => WhyNotClear(farm, RowSpot(i), ignoreCabins: true)).FirstOrDefault(w => w != null);
+                string? why = cabins.Select((_, i) => WhyNotClear(farm, RowSpot(farm, i), ignoreCabins: true)).FirstOrDefault(w => w != null);
                 if (why != null)
                 {
                     Log.Warn($"Couldn't line up the cabins on {name}: {why}.");
@@ -348,7 +394,7 @@ internal static class Server
                 }
                 for (int i = 0; i < cabins.Count; i++)
                 {
-                    Vector2 t = RowSpot(i);
+                    Vector2 t = RowSpot(farm, i);
                     ClearSpot(farm, t);
                     cabins[i].tileX.Value = (int)t.X;
                     cabins[i].tileY.Value = (int)t.Y;

@@ -254,6 +254,9 @@ internal static class Bot
                 Game1.activeClickableMenu = null;
             return true;
         }
+        // A new farm waits for its map to be picked (SV_BOT_PICK_MAP picks it); walk the route only after that.
+        if (Farms.HomeFarmOf(Game1.player) is string h && FarmMaps.IsPending(Game1.getLocationFromName(h)))
+            return true;
         if (quarryHold >= 0 && Game1.locationRequest == null)
         {
             // The game's own walking step (collisions and map-edge exits), as when a player holds a direction key.
@@ -303,6 +306,13 @@ internal static class Bot
             case 2:
                 Log.Info($"[quarry] at {here.Name} {Game1.player.TilePoint}; path walkable: {string.Join(" ", Enumerable.Range(0, 4).Select(i => dir == 2 ? new Point(edge.X, edge.Y - i) : new Point(edge.X + i, edge.Y)).Select(t => $"{t.X},{t.Y}={(Walk(t.X, t.Y) ? "ok" : "X")}"))}; exits: {string.Join(" ", here.warps.Where(w => w.TargetName.StartsWith(Quarry.Prefix)).Select(w => $"{w.X},{w.Y}->{w.TargetName} {w.TargetX},{w.TargetY}"))}; farm says best Mining {(home != null ? Quarry.PublishedLevel(home) : -1)}");
                 Snapshot("quarry-farm-edge.png", dir == 2 ? edge.X : edge.X + 6, dir == 2 ? edge.Y - 5 : edge.Y);
+                if (here is Farm hf)
+                {
+                    // Where the cabins stand on this farm's map (the picker moves them there).
+                    Point house = hf.GetMainFarmHouseEntry();
+                    Snapshot("farm-cabins.png", house.X - 5, house.Y + 5, 1600, 1000);
+                    Log.Info($"[maps] cabins at {string.Join(" ", hf.buildings.Where(b => b.isCabin).Select(b => b.tileX.Value + "," + b.tileY.Value))}; bin at {string.Join(" ", hf.buildings.Where(b => b.buildingType.Value == "Shipping Bin").Select(b => b.tileX.Value + "," + b.tileY.Value))}; other buildings: {string.Join(" ", hf.buildings.Where(b => !b.isCabin && b.buildingType.Value != "Shipping Bin").Select(b => b.buildingType.Value))}");
+                }
                 Go(edge, "to the quarry path's edge");
                 break;
             case 3:
