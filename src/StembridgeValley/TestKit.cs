@@ -33,14 +33,23 @@ internal static class TestKit
                     return;
                 foreach (Farmer f in Game1.getOnlineFarmers())
                     if (!f.IsMainPlayer && f.isCustomized.Value && Sent.Add(f.UniqueMultiplayerID))
+                    {
+                        Log.Info($"Test kit: sending to {f.Name}.");
                         helper.Multiplayer.SendMessage(1, Message, new[] { helper.ModRegistry.ModID }, new[] { f.UniqueMultiplayerID });
+                    }
+
             };
         }
         else
             helper.Events.Multiplayer.ModMessageReceived += (_, e) =>
             {
-                if (e.FromModID != Helper.ModRegistry.ModID || e.Type != Message || e.FromPlayerID != Game1.MasterPlayer?.UniqueMultiplayerID)
+                if (e.FromModID != Helper.ModRegistry.ModID || e.Type != Message)
                     return;
+                if (e.FromPlayerID != Game1.MasterPlayer?.UniqueMultiplayerID)
+                {
+                    Log.Info($"Test kit: ignored a message from {e.FromPlayerID} (host is {Game1.MasterPlayer?.UniqueMultiplayerID}).");
+                    return;
+                }
                 var raised = new List<string>();
                 foreach (var (skill, level) in Levels)
                 {
@@ -50,6 +59,7 @@ internal static class TestKit
                     Game1.player.gainExperience(skill, need);
                     raised.Add($"{Skills.Name(skill)} {level}");
                 }
+                Log.Info("Test kit: raised to " + (raised.Count > 0 ? string.Join(", ", raised) : "nothing (already there)"));
                 if (raised.Count > 0)
                     Game1.chatBox?.addInfoMessage("Test world: raised you to " + string.Join(", ", raised) + ".");
             };
