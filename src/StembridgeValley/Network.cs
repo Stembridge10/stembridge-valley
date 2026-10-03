@@ -31,6 +31,10 @@ internal static class Network
             // The player key becomes the farmhand's owner ID (vanilla LAN play leaves it blank).
             harmony.Patch(AccessTools.Method(typeof(LidgrenClient), nameof(LidgrenClient.getUserID)),
                 postfix: new HarmonyMethod(typeof(Network), nameof(ClientUserId_Postfix)));
+            // Vanilla greys out a farmer whose owner ID isn't this PC's Steam ID. Here the owner is the Discord account,
+            // and the server only ever lists the player's own farmer, so it's never "someone else's".
+            harmony.Patch(AccessTools.Method(typeof(StardewValley.Menus.FarmhandMenu.FarmhandSlot), nameof(StardewValley.Menus.FarmhandMenu.FarmhandSlot.BelongsToAnotherPlayer)),
+                postfix: new HarmonyMethod(typeof(Network), nameof(BelongsToAnother_Postfix)));
         }
         else if (SV.Role == Role.Server)
         {
@@ -87,6 +91,12 @@ internal static class Network
     {
         if (!string.IsNullOrEmpty(SV.PlayerKey))
             __result = SV.PlayerKey;
+    }
+
+    private static void BelongsToAnother_Postfix(StardewValley.Menus.FarmhandMenu.FarmhandSlot __instance, ref bool __result)
+    {
+        if (__result && !string.IsNullOrEmpty(SV.PlayerKey) && __instance.Farmer?.userID.Value == SV.PlayerKey)
+            __result = false;
     }
 
     private static void Exit()
