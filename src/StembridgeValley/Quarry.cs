@@ -223,7 +223,7 @@ internal static class Quarry
         Set(back, 0, 41, 587); Set(back, 1, 41, 587); Set(back, 2, 41, 587);
         Set(back, 0, 42, 587); Set(back, 1, 42, 587); Set(back, 2, 42, 587);
         Set(back, 0, 43, 587); Set(back, 1, 43, 587); Set(back, 2, 43, 587);
-        Set(back, 0, 44, 562); Set(back, 1, 44, 512); Set(back, 2, 44, 618);
+        Set(back, 0, 44, 587); Set(back, 1, 44, 587); Set(back, 2, 44, 587);
         Set(back, 0, 45, 587); Set(back, 1, 45, 587); Set(back, 2, 45, 587);
         Set(back, 0, 46, 587); Set(back, 1, 46, 587); Set(back, 2, 46, 587);
         Set(back, 0, 47, 587); Set(back, 1, 47, 587); Set(back, 2, 47, 587);
