@@ -84,7 +84,7 @@ internal static class Bot
         switch (gateStage)
         {
             case 0:
-                Game1.warpFarmer("BusStop", 14, 23, 0);
+                Game1.warpFarmer("BusStop", 15, 23, 0);
                 gateStage = 1;
                 return true;
             case 1 when Game1.currentLocation?.Name != "BusStop" || Game1.locationRequest != null:
@@ -93,10 +93,10 @@ internal static class Bot
                 if (++gateWait < 150)
                     return true; // let the screen fade in fully
                 gateWait = 0;
-                var tile = Game1.currentLocation.map.GetLayer("Buildings").Tiles[14, 21];
+                var tile = Game1.currentLocation.map.GetLayer("Buildings").Tiles[15, 21];
                 string action = tile?.Properties.TryGetValue("Action", out var a) == true ? a.ToString() : "-";
-                Log.Info($"[gatecheck] at BusStop {Game1.player.TilePoint.X},{Game1.player.TilePoint.Y}; gate tile action={action}; passable={Game1.currentLocation.isTilePassable(new xTile.Dimensions.Location(14, 21), Game1.viewport)}");
-                bool ok = Game1.currentLocation.checkAction(new xTile.Dimensions.Location(14, 21), Game1.viewport, Game1.player);
+                Log.Info($"[gatecheck] at BusStop {Game1.player.TilePoint.X},{Game1.player.TilePoint.Y}; gate tile action={action}; passable={Game1.currentLocation.isTilePassable(new xTile.Dimensions.Location(15, 21), Game1.viewport)}");
+                bool ok = Game1.currentLocation.checkAction(new xTile.Dimensions.Location(15, 21), Game1.viewport, Game1.player);
                 Log.Info($"[gatecheck] clicked gate: {ok}; menu={Game1.activeClickableMenu?.GetType().Name ?? "none"}; question={(Game1.activeClickableMenu as DialogueBox)?.getCurrentString() ?? "-"}");
                 gateStage = 2;
                 return true;
