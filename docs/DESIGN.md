@@ -10,6 +10,22 @@ Status: progression drafted; calendar, marriage and festival decisions made Oct 
 - Each farm has its own invite code so friend groups land together; solo joiners go to any farm with a free spot.
 - Load test (Oct 2): one server held 20 bot players at ~3 ms of a 16.7 ms tick; overnight save ~10 s at 20 players.
 
+## Progression direction (decided Oct 3, overrides the town/farm project sections below where they differ)
+- Goal: a game that lasts forever and is grindy in a fun way, RuneScape-style. Late joiners must have as much to do as veterans.
+- **Farm projects are the main progression.** Long chain per farm; never "finished".
+- **No gating:** farm projects add rewards and bonuses on top of vanilla; nothing vanilla allows gets locked behind them.
+- **OSRS-style skill grinding is the core long-term loop** (owner, Oct 3): long personal skill levels with unlocks along the way.
+  Progression is personal, so a late joiner starts at level 1 like everyone did; a finished town doesn't matter.
+- **Rejected: RS3-style timed town events** (owner: players wouldn't like them).
+- **Personal/farm unlocks instead of town unlocks:** each farm can earn its own quarry attached to the farm; the town quarry stays open as a public one. The desert bus is a personal unlock (a bus pass), not a server-wide repair.
+- **Skills (agreed Oct 3):** vanilla 1-10 unchanged, then on to **50** on an OSRS-style rising XP curve (50 takes months).
+  Cap can be raised later. Stretch the 5 Stardew skills first; new skills (Cooking, Ranching...) later.
+  Something worthwhile about every 5 levels (farm quarry, bus pass, rare seeds, farm fishing spot, forest patch), skillcape at 50,
+  Discord hiscores and milestone announcements. Vanilla level 5/10 professions stay.
+- First build: leveling system + Mining (farm quarry unlock).
+- Idea list offered Oct 3 (owner likes WoW and OSRS), not yet approved: skilling pets, collection log, clue scrolls,
+  area achievement diaries, raids with weekly lockout, villager factions, horse mounts/cosmetics, titles, ironman mode.
+
 ## Build order
 1. **4-player farms** (above).
 2. **Projects**: farm projects (per farm) and town projects (server-wide Community Center).
