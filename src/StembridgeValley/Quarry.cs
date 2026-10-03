@@ -229,6 +229,14 @@ internal static class Quarry
         Set(buildings, 0, 43, 493); Set(buildings, 1, 43, 493); Set(buildings, 2, 43, 494);
         Set(front, 0, 47, 413); Set(front, 1, 47, 414); Set(front, 2, 47, 438);
         Set(back, 2, 48, 175); Set(buildings, 2, 48, 394);
+
+        // Soften the cut: leafy canopies (the farm's own tree-line pieces) hang over both corners of the opening,
+        // so it reads as a path through the trees rather than a square notch.
+        if (map.GetLayer("AlwaysFront") is { } over)
+            foreach (int top in new[] { 40, 47 })
+                for (int i = 0; i < 4; i++)
+                    for (int r = 0; r < 4; r++)
+                        Set(over, i, top + r, 18 + i + 25 * r);
     }
 
     /// <summary>Server: the farm's left edge leads to its quarry; the quarry's right edge leads back.</summary>
