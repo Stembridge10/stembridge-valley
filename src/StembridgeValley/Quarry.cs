@@ -452,6 +452,7 @@ Set(back, 0, 26, 351); Set(back, 1, 26, 351); Set(back, 2, 26, 351); Set(back, 3
         Set(buildings, 0, 40, null); Set(buildings, 1, 40, null); Set(buildings, 2, 40, null);
         Set(buildings, 0, 41, null); Set(buildings, 1, 41, null); Set(buildings, 2, 41, null);
         Set(buildings, 0, 42, null); Set(buildings, 1, 42, null); Set(buildings, 2, 42, null);
+        Set(front, 0, 33, null); Set(front, 1, 33, null);
         Set(front, 0, 39, null); Set(front, 1, 39, null);
         Set(front, 0, 40, null); Set(front, 1, 40, null);
         Set(front, 0, 41, null); Set(front, 1, 41, null);
