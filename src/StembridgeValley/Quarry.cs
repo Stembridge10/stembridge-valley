@@ -45,16 +45,16 @@ internal static class Quarry
         new("Maps\\Farm_Ranching", Row(-1, 28, 30), new(1, 29), 3, new(0, 28, 4, 3), new(0, 27, 15, 5)),
         // Beach: the dock at the bottom runs on off the bottom edge.
         new("Maps\\Farm_Island", Column(110, 51, 53), new(52, 108), 2, new(51, 95, 3, 15), new(51, 95, 3, 15)),
-        // Riverland: the small south-west bank landing joins the quarry path at the left edge.
-        new("Maps\\Farm_Fishing", Row(-1, 39, 42), new(1, 40), 3, new(0, 39, 5, 4), new(0, 34, 14, 13)),
-        // Forest: a short trail through the left woods.
-        new("Maps\\Farm_Foraging", Row(-1, 26, 29), new(1, 27), 3, new(0, 26, 4, 4), new(0, 21, 13, 13)),
-        // Hill-top: a break in the left ledge beside the southern dirt patch.
-        new("Maps\\Farm_Mining", Row(-1, 36, 39), new(1, 37), 3, new(0, 36, 3, 4), new(0, 31, 12, 13)),
-        // Wilderness: below the large west ledge.
-        new("Maps\\Farm_Combat", Row(-1, 37, 40), new(1, 38), 3, new(0, 37, 3, 4), new(0, 32, 12, 13)),
-        // Four Corners: the existing gap in the west tree belt.
-        new("Maps\\Farm_FourCorners", Row(-1, 35, 38), new(1, 36), 3, new(0, 35, 5, 4), new(0, 30, 14, 13)),
+        // Riverland: the dirt shore between the river and the hill runs on off the left edge.
+        new("Maps\\Farm_Fishing", Row(-1, 36, 38), new(1, 37), 3, new(0, 36, 6, 3), new(0, 35, 14, 5)),
+        // Forest: a gap in the canopy where the woods meet the left edge.
+        new("Maps\\Farm_Foraging", Row(-1, 27, 29), new(1, 28), 3, new(0, 27, 7, 3), new(0, 26, 14, 5)),
+        // Hill-top: the grass shelf between the two left rock walls opens to the edge.
+        new("Maps\\Farm_Mining", Row(-1, 39, 42), new(1, 40), 3, new(0, 39, 4, 4), new(0, 38, 12, 6)),
+        // Wilderness: the north cliff carries on to the edge and the canyon floor runs off under it.
+        new("Maps\\Farm_Combat", Row(-1, 34, 41), new(1, 37), 3, new(0, 34, 6, 8), new(0, 34, 14, 8)),
+        // Four Corners: a rock-ledge opening in the west grass bank, like the standard farm's.
+        new("Maps\\Farm_FourCorners", Row(-1, 46, 49), new(1, 47), 3, new(0, 46, 5, 4), new(0, 45, 14, 6)),
     };
 
     private static Point[] Row(int x, int y0, int y1) => Enumerable.Range(y0, y1 - y0 + 1).Select(y => new Point(x, y)).ToArray();
@@ -367,54 +367,192 @@ internal static class Quarry
         }
     }
 
-    // Each variant uses the same rock ledge tile recipe as the standard farm's north bank. The two wooded
-    // variants continue the cleared strip only as far as the existing open ground.
-    private static void OpenRiverlandQuarryPath(Map map) => OpenLeftQuarryGate(map, 39, 4);
-    private static void OpenForestQuarryPath(Map map) => OpenLeftQuarryGate(map, 26, 3);
-    private static void OpenHilltopQuarryPath(Map map) => OpenLeftQuarryGate(map, 36, 2);
-    private static void OpenWildernessQuarryPath(Map map) => OpenLeftQuarryGate(map, 37, 2);
-    private static void OpenFourCornersQuarryPath(Map map) => OpenLeftQuarryGate(map, 35, 4);
-
-    private static void OpenLeftQuarryGate(Map map, int y0, int continuationX)
+    // Each farm's left-edge path, tile for tile as previewed (map-dumps/edits/*_quarry_path.json) and bounds-checked.
+    /// <summary>The layers the left-edge quarry paths edit; false (and a warning) when the map isn't the vanilla one.</summary>
+    private static bool LeftEdgeLayers(Map map, out TileSheet s, out Layer back, out Layer buildings, out Layer front, out Layer over)
     {
-        TileSheet? s = map.TileSheets.FirstOrDefault(t => t.Id == "untitled tile sheet");
-        Layer? back = map.GetLayer("Back"), buildings = map.GetLayer("Buildings"), front = map.GetLayer("Front"), always = map.GetLayer("AlwaysFront");
-        if (s == null || back == null || buildings == null || front == null || always == null || back.LayerWidth < 20 || back.LayerHeight <= y0 + 4)
-        {
-            Log.Warn("Quarry: the farm map isn't the expected one; no path to the quarry.");
+        s = map.TileSheets.FirstOrDefault(t => t.Id == "untitled tile sheet")!;
+        back = map.GetLayer("Back"); buildings = map.GetLayer("Buildings"); front = map.GetLayer("Front"); over = map.GetLayer("AlwaysFront");
+        if (s != null && back != null && buildings != null && front != null && over != null && back.LayerWidth >= 20 && back.LayerHeight >= 56)
+            return true;
+        Log.Warn("Quarry: the farm map isn't the expected one; no path to the quarry.");
+        return false;
+    }
+
+    private static void OpenRiverlandQuarryPath(Map map)
+    {
+        if (!LeftEdgeLayers(map, out var s, out var back, out var buildings, out var front, out var over))
             return;
-        }
         void Set(Layer layer, int x, int y, int? index) =>
             layer.Tiles[x, y] = index is int i ? new StaticTile(layer, s, BlendMode.Alpha, i) : null;
-
-        foreach (int x in Enumerable.Range(0, 3))
-            Set(buildings, x, y0 - 5, x == 2 ? 444 : 16);
-        int[][] cliff = { new[] { 468, 468, 469 }, new[] { 493, 492, 494 }, new[] { 518, 517, 519 }, new[] { 543, 542, 544 } };
-        for (int row = 0; row < cliff.Length; row++)
-            for (int x = 0; x < 3; x++)
-                Set(buildings, x, y0 - 4 + row, cliff[row][x]);
-
-        for (int y = y0 - 6; y < y0; y++)
-            for (int x = 0; x < 3; x++)
-            {
-                Set(front, x, y, null);
-                Set(always, x, y, null);
-            }
-        for (int x = 0; x <= continuationX; x++)
-            for (int y = y0; y <= y0 + 3; y++)
-            {
-                Set(back, x, y, 587);
-                Set(buildings, x, y, null);
-                Set(front, x, y, null);
-                Set(always, x, y, null);
-            }
-        int[] lip = { 413, 414, 438 };
-        for (int x = 0; x < 3; x++)
-        {
-            Set(front, x, y0 + 3, lip[x]);
-            Set(always, x, y0 + 4, null);
-        }
+Set(back, 0, 36, 587); Set(back, 1, 36, 587); Set(back, 2, 36, 587); Set(back, 3, 36, 587);
+        Set(back, 0, 37, 587); Set(back, 1, 37, 587); Set(back, 2, 37, 587); Set(back, 3, 37, 587);
+        Set(back, 0, 38, 587); Set(back, 1, 38, 587); Set(back, 2, 38, 587); Set(back, 3, 38, 587);
+        Set(buildings, 0, 35, 259);
+        Set(buildings, 0, 36, null); Set(buildings, 1, 36, null); Set(buildings, 2, 36, null); Set(buildings, 3, 36, null);
+        Set(buildings, 0, 37, null); Set(buildings, 1, 37, null); Set(buildings, 2, 37, null); Set(buildings, 3, 37, null);
+        Set(buildings, 0, 38, null); Set(buildings, 1, 38, null); Set(buildings, 2, 38, null); Set(buildings, 3, 38, null);
+        Set(front, 0, 34, null); Set(front, 1, 34, null); Set(front, 2, 34, null); Set(front, 3, 34, null);
+        Set(front, 0, 35, null); Set(front, 1, 35, null); Set(front, 2, 35, null); Set(front, 3, 35, null);
+        Set(front, 0, 36, null); Set(front, 1, 36, null); Set(front, 2, 36, null); Set(front, 3, 36, null);
+        Set(front, 0, 37, null); Set(front, 1, 37, null); Set(front, 2, 37, null); Set(front, 3, 37, null);
+        Set(front, 0, 38, 413); Set(front, 1, 38, 414); Set(front, 2, 38, 413); Set(front, 3, 38, 414);
+        Set(front, 0, 39, null); Set(front, 1, 39, null); Set(front, 2, 39, null); Set(front, 3, 39, null);
+        Set(front, 0, 40, null); Set(front, 1, 40, null); Set(front, 2, 40, null); Set(front, 3, 40, null);
+        Set(front, 0, 41, null); Set(front, 1, 41, null); Set(front, 2, 41, null); Set(front, 3, 41, null);
+        Set(over, 0, 36, null); Set(over, 1, 36, null); Set(over, 2, 36, null); Set(over, 3, 36, null);
+        Set(over, 0, 37, null); Set(over, 1, 37, null); Set(over, 2, 37, null); Set(over, 3, 37, null);
+        Set(over, 0, 38, null); Set(over, 1, 38, null); Set(over, 2, 38, null); Set(over, 3, 38, null);
     }
+
+    private static void OpenForestQuarryPath(Map map)
+    {
+        if (!LeftEdgeLayers(map, out var s, out var back, out var buildings, out var front, out var over))
+            return;
+        void Set(Layer layer, int x, int y, int? index) =>
+            layer.Tiles[x, y] = index is int i ? new StaticTile(layer, s, BlendMode.Alpha, i) : null;
+Set(back, 0, 26, 351); Set(back, 1, 26, 351); Set(back, 2, 26, 351); Set(back, 3, 26, 351); Set(back, 4, 26, 351);
+        Set(back, 0, 27, 351); Set(back, 1, 27, 351); Set(back, 2, 27, 351); Set(back, 3, 27, 351); Set(back, 4, 27, 351);
+        Set(back, 0, 28, 351); Set(back, 1, 28, 351); Set(back, 2, 28, 351); Set(back, 3, 28, 351); Set(back, 4, 28, 351);
+        Set(back, 0, 29, 351); Set(back, 1, 29, 351); Set(back, 2, 29, 351); Set(back, 3, 29, 351); Set(back, 4, 29, 351);
+        Set(back, 0, 30, 351); Set(back, 1, 30, 351); Set(back, 2, 30, 351); Set(back, 3, 30, 351); Set(back, 4, 30, 351);
+        Set(buildings, 3, 26, 16); Set(buildings, 4, 26, 16);
+        Set(buildings, 0, 27, null); Set(buildings, 1, 27, null); Set(buildings, 2, 27, null); Set(buildings, 3, 27, null); Set(buildings, 4, 27, null);
+        Set(buildings, 0, 28, null); Set(buildings, 1, 28, null); Set(buildings, 2, 28, null); Set(buildings, 3, 28, null); Set(buildings, 4, 28, null);
+        Set(buildings, 0, 29, null); Set(buildings, 1, 29, null); Set(buildings, 2, 29, null); Set(buildings, 3, 29, null); Set(buildings, 4, 29, null);
+        Set(buildings, 3, 30, 16); Set(buildings, 4, 30, 16);
+        Set(over, 0, 26, 967); Set(over, 1, 26, 968); Set(over, 2, 26, 967); Set(over, 3, 26, 968); Set(over, 4, 26, 992);
+        Set(over, 0, 27, null); Set(over, 1, 27, null); Set(over, 2, 27, null); Set(over, 3, 27, null); Set(over, 4, 27, null);
+        Set(over, 0, 28, null); Set(over, 1, 28, null); Set(over, 2, 28, null); Set(over, 3, 28, null); Set(over, 4, 28, null);
+        Set(over, 0, 29, null); Set(over, 1, 29, null); Set(over, 2, 29, null); Set(over, 3, 29, null); Set(over, 4, 29, null); Set(over, 5, 29, null);
+        Set(over, 0, 30, 1042); Set(over, 1, 30, 1043); Set(over, 2, 30, 1042); Set(over, 3, 30, 1043); Set(over, 4, 30, 1017); Set(over, 5, 30, 1017);
+    }
+
+    private static void OpenHilltopQuarryPath(Map map)
+    {
+        if (!LeftEdgeLayers(map, out var s, out var back, out var buildings, out var front, out var over))
+            return;
+        void Set(Layer layer, int x, int y, int? index) =>
+            layer.Tiles[x, y] = index is int i ? new StaticTile(layer, s, BlendMode.Alpha, i) : null;
+Set(back, 0, 39, 351); Set(back, 1, 39, 352); Set(back, 2, 39, 351);
+        Set(back, 0, 40, 351); Set(back, 1, 40, 352); Set(back, 2, 40, 351);
+        Set(back, 0, 41, 351); Set(back, 1, 41, 352); Set(back, 2, 41, 351);
+        Set(back, 0, 42, 351); Set(back, 1, 42, 352); Set(back, 2, 42, 351);
+        Set(buildings, 2, 38, 444);
+        Set(buildings, 0, 39, null); Set(buildings, 1, 39, null); Set(buildings, 2, 39, null);
+        Set(buildings, 0, 40, null); Set(buildings, 1, 40, null); Set(buildings, 2, 40, null);
+        Set(buildings, 0, 41, null); Set(buildings, 1, 41, null); Set(buildings, 2, 41, null);
+        Set(buildings, 0, 42, null); Set(buildings, 1, 42, null); Set(buildings, 2, 42, null);
+        Set(front, 0, 39, null); Set(front, 1, 39, null);
+        Set(front, 0, 40, null); Set(front, 1, 40, null);
+        Set(front, 0, 41, null); Set(front, 1, 41, null);
+        Set(front, 0, 42, null); Set(front, 1, 42, null);
+        Set(over, 0, 36, null); Set(over, 1, 36, null);
+        Set(over, 0, 37, null); Set(over, 1, 37, null);
+        Set(over, 0, 38, null); Set(over, 1, 38, null);
+        Set(over, 0, 39, null); Set(over, 1, 39, null);
+        Set(over, 0, 40, null); Set(over, 1, 40, null);
+        Set(over, 0, 41, null); Set(over, 1, 41, null);
+    }
+
+    private static void OpenWildernessQuarryPath(Map map)
+    {
+        if (!LeftEdgeLayers(map, out var s, out var back, out var buildings, out var front, out var over))
+            return;
+        void Set(Layer layer, int x, int y, int? index) =>
+            layer.Tiles[x, y] = index is int i ? new StaticTile(layer, s, BlendMode.Alpha, i) : null;
+Set(back, 0, 30, 587); Set(back, 1, 30, 587); Set(back, 2, 30, 587); Set(back, 3, 30, 587); Set(back, 4, 30, 587);
+        Set(back, 0, 31, 587); Set(back, 1, 31, 587); Set(back, 2, 31, 587); Set(back, 3, 31, 587); Set(back, 4, 31, 587);
+        Set(back, 0, 32, 587); Set(back, 1, 32, 587); Set(back, 2, 32, 587); Set(back, 3, 32, 587); Set(back, 4, 32, 587);
+        Set(back, 0, 33, 537); Set(back, 1, 33, 537); Set(back, 2, 33, 537); Set(back, 3, 33, 537); Set(back, 4, 33, 537);
+        Set(back, 0, 34, 512); Set(back, 1, 34, 562); Set(back, 2, 34, 512); Set(back, 3, 34, 562); Set(back, 4, 34, 512);
+        Set(back, 0, 35, 587); Set(back, 1, 35, 587); Set(back, 2, 35, 587); Set(back, 3, 35, 587); Set(back, 4, 35, 587);
+        Set(back, 0, 36, 587); Set(back, 1, 36, 587); Set(back, 2, 36, 587); Set(back, 3, 36, 587); Set(back, 4, 36, 587);
+        Set(back, 0, 37, 587); Set(back, 1, 37, 587); Set(back, 2, 37, 587); Set(back, 3, 37, 587); Set(back, 4, 37, 587);
+        Set(back, 0, 38, 587); Set(back, 1, 38, 587); Set(back, 2, 38, 587); Set(back, 3, 38, 587); Set(back, 4, 38, 587);
+        Set(back, 0, 39, 587); Set(back, 1, 39, 587); Set(back, 2, 39, 587); Set(back, 3, 39, 587); Set(back, 4, 39, 587);
+        Set(back, 0, 41, 227); Set(back, 1, 41, 227); Set(back, 2, 41, 227);
+        Set(buildings, 0, 28, 376); Set(buildings, 1, 28, 376); Set(buildings, 2, 28, 376); Set(buildings, 3, 28, 376); Set(buildings, 4, 28, 376); Set(buildings, 5, 28, 376);
+        Set(buildings, 0, 29, 175); Set(buildings, 1, 29, 175); Set(buildings, 2, 29, 175); Set(buildings, 3, 29, 175); Set(buildings, 4, 29, 175); Set(buildings, 5, 29, 175);
+        Set(buildings, 0, 30, 467); Set(buildings, 1, 30, 468); Set(buildings, 2, 30, 467); Set(buildings, 3, 30, 468); Set(buildings, 4, 30, 467); Set(buildings, 5, 30, 468);
+        Set(buildings, 0, 31, 492); Set(buildings, 1, 31, 493); Set(buildings, 2, 31, 492); Set(buildings, 3, 31, 493); Set(buildings, 4, 31, 492); Set(buildings, 5, 31, 493);
+        Set(buildings, 0, 32, 517); Set(buildings, 1, 32, 518); Set(buildings, 2, 32, 517); Set(buildings, 3, 32, 518); Set(buildings, 4, 32, 517); Set(buildings, 5, 32, 518);
+        Set(buildings, 0, 33, 542); Set(buildings, 1, 33, 543); Set(buildings, 2, 33, 542); Set(buildings, 3, 33, 543); Set(buildings, 4, 33, 542); Set(buildings, 5, 33, 543);
+        Set(buildings, 0, 34, null); Set(buildings, 1, 34, null); Set(buildings, 2, 34, null); Set(buildings, 3, 34, null); Set(buildings, 4, 34, null);
+        Set(buildings, 0, 35, null); Set(buildings, 1, 35, null); Set(buildings, 2, 35, null); Set(buildings, 3, 35, null); Set(buildings, 4, 35, null);
+        Set(buildings, 0, 36, null); Set(buildings, 1, 36, null); Set(buildings, 2, 36, null); Set(buildings, 3, 36, null); Set(buildings, 4, 36, null);
+        Set(buildings, 0, 37, null); Set(buildings, 1, 37, null); Set(buildings, 2, 37, null); Set(buildings, 3, 37, null); Set(buildings, 4, 37, null);
+        Set(buildings, 0, 38, null); Set(buildings, 1, 38, null); Set(buildings, 2, 38, null); Set(buildings, 3, 38, null); Set(buildings, 4, 38, null);
+        Set(buildings, 0, 39, null); Set(buildings, 1, 39, null); Set(buildings, 2, 39, null); Set(buildings, 3, 39, null); Set(buildings, 4, 39, null);
+        Set(buildings, 0, 40, null); Set(buildings, 1, 40, null); Set(buildings, 2, 40, null);
+        Set(buildings, 0, 41, null); Set(buildings, 1, 41, null); Set(buildings, 2, 41, null);
+        Set(front, 0, 28, null); Set(front, 1, 28, null); Set(front, 2, 28, null); Set(front, 3, 28, null); Set(front, 4, 28, null); Set(front, 5, 28, null);
+        Set(front, 0, 29, null); Set(front, 1, 29, null); Set(front, 2, 29, null); Set(front, 3, 29, null); Set(front, 4, 29, null); Set(front, 5, 29, null);
+        Set(front, 0, 30, null); Set(front, 1, 30, null); Set(front, 2, 30, null); Set(front, 3, 30, null); Set(front, 4, 30, null); Set(front, 5, 30, null);
+        Set(front, 0, 31, null); Set(front, 1, 31, null); Set(front, 2, 31, null); Set(front, 3, 31, null); Set(front, 4, 31, null); Set(front, 5, 31, null);
+        Set(front, 0, 32, null); Set(front, 1, 32, null); Set(front, 2, 32, null); Set(front, 3, 32, null); Set(front, 4, 32, null); Set(front, 5, 32, null);
+        Set(front, 0, 33, null); Set(front, 1, 33, null); Set(front, 2, 33, null); Set(front, 3, 33, null); Set(front, 4, 33, null); Set(front, 5, 33, null);
+        Set(front, 0, 34, null); Set(front, 1, 34, null); Set(front, 2, 34, null); Set(front, 3, 34, null); Set(front, 4, 34, null);
+        Set(front, 0, 35, null); Set(front, 1, 35, null); Set(front, 2, 35, null); Set(front, 3, 35, null); Set(front, 4, 35, null);
+        Set(front, 0, 36, null); Set(front, 1, 36, null); Set(front, 2, 36, null); Set(front, 3, 36, null); Set(front, 4, 36, null);
+        Set(front, 0, 37, null); Set(front, 1, 37, null); Set(front, 2, 37, null); Set(front, 3, 37, null); Set(front, 4, 37, null);
+        Set(front, 0, 38, null); Set(front, 1, 38, null); Set(front, 2, 38, null); Set(front, 3, 38, null); Set(front, 4, 38, null);
+        Set(front, 0, 39, null); Set(front, 1, 39, null); Set(front, 2, 39, null); Set(front, 3, 39, null); Set(front, 4, 39, null);
+        Set(front, 0, 40, null); Set(front, 1, 40, null); Set(front, 2, 40, null);
+        Set(front, 0, 41, null); Set(front, 1, 41, null); Set(front, 2, 41, null);
+        Set(over, 0, 28, null); Set(over, 1, 28, null); Set(over, 2, 28, null); Set(over, 3, 28, null); Set(over, 4, 28, null); Set(over, 5, 28, null);
+        Set(over, 0, 29, null); Set(over, 1, 29, null); Set(over, 2, 29, null); Set(over, 3, 29, null); Set(over, 4, 29, null); Set(over, 5, 29, null);
+        Set(over, 0, 30, null); Set(over, 1, 30, null); Set(over, 2, 30, null); Set(over, 3, 30, null); Set(over, 4, 30, null); Set(over, 5, 30, null);
+        Set(over, 0, 31, null); Set(over, 1, 31, null); Set(over, 2, 31, null); Set(over, 3, 31, null); Set(over, 4, 31, null); Set(over, 5, 31, null);
+        Set(over, 0, 32, null); Set(over, 1, 32, null); Set(over, 2, 32, null); Set(over, 3, 32, null); Set(over, 4, 32, null); Set(over, 5, 32, null);
+        Set(over, 0, 33, null); Set(over, 1, 33, null); Set(over, 2, 33, null); Set(over, 3, 33, null); Set(over, 4, 33, null); Set(over, 5, 33, null);
+        Set(over, 0, 34, null); Set(over, 1, 34, null); Set(over, 2, 34, null); Set(over, 3, 34, null); Set(over, 4, 34, null);
+        Set(over, 0, 35, null); Set(over, 1, 35, null); Set(over, 2, 35, null); Set(over, 3, 35, null); Set(over, 4, 35, null);
+        Set(over, 0, 36, null); Set(over, 1, 36, null); Set(over, 2, 36, null); Set(over, 3, 36, null); Set(over, 4, 36, null);
+        Set(over, 0, 37, null); Set(over, 1, 37, null); Set(over, 2, 37, null); Set(over, 3, 37, null); Set(over, 4, 37, null);
+        Set(over, 0, 38, null); Set(over, 1, 38, null); Set(over, 2, 38, null); Set(over, 3, 38, null); Set(over, 4, 38, null);
+        Set(over, 0, 39, null); Set(over, 1, 39, null); Set(over, 2, 39, null); Set(over, 3, 39, null); Set(over, 4, 39, null);
+    }
+
+    private static void OpenFourCornersQuarryPath(Map map)
+    {
+        if (!LeftEdgeLayers(map, out var s, out var back, out var buildings, out var front, out var over))
+            return;
+        void Set(Layer layer, int x, int y, int? index) =>
+            layer.Tiles[x, y] = index is int i ? new StaticTile(layer, s, BlendMode.Alpha, i) : null;
+Set(back, 0, 42, 587); Set(back, 1, 42, 587); Set(back, 2, 42, 587);
+        Set(back, 0, 43, 587); Set(back, 1, 43, 587); Set(back, 2, 43, 587);
+        Set(back, 0, 44, 587); Set(back, 1, 44, 587); Set(back, 2, 44, 587);
+        Set(back, 0, 45, 587); Set(back, 1, 45, 587); Set(back, 2, 45, 587);
+        Set(back, 0, 46, 587); Set(back, 1, 46, 587); Set(back, 2, 46, 587);
+        Set(back, 0, 47, 587); Set(back, 1, 47, 587); Set(back, 2, 47, 587);
+        Set(back, 0, 48, 587); Set(back, 1, 48, 587); Set(back, 2, 48, 587);
+        Set(back, 0, 49, 587); Set(back, 1, 49, 587); Set(back, 2, 49, 587);
+        Set(buildings, 0, 41, 16); Set(buildings, 1, 41, 16); Set(buildings, 2, 41, 444);
+        Set(buildings, 0, 42, 468); Set(buildings, 1, 42, 468); Set(buildings, 2, 42, 469);
+        Set(buildings, 0, 43, 493); Set(buildings, 1, 43, 492); Set(buildings, 2, 43, 494);
+        Set(buildings, 0, 44, 518); Set(buildings, 1, 44, 517); Set(buildings, 2, 44, 519);
+        Set(buildings, 0, 45, 543); Set(buildings, 1, 45, 542); Set(buildings, 2, 45, 544);
+        Set(buildings, 0, 46, null); Set(buildings, 1, 46, null); Set(buildings, 2, 46, null);
+        Set(buildings, 0, 47, null); Set(buildings, 1, 47, null); Set(buildings, 2, 47, null);
+        Set(buildings, 0, 48, null); Set(buildings, 1, 48, null); Set(buildings, 2, 48, null);
+        Set(buildings, 0, 49, null); Set(buildings, 1, 49, null); Set(buildings, 2, 49, null);
+        Set(buildings, 0, 50, 16); Set(buildings, 1, 50, 16); Set(buildings, 2, 50, 394);
+        Set(front, 0, 42, null); Set(front, 1, 42, null); Set(front, 2, 42, null);
+        Set(front, 0, 43, null); Set(front, 1, 43, null); Set(front, 2, 43, null);
+        Set(front, 0, 44, null); Set(front, 1, 44, null); Set(front, 2, 44, null);
+        Set(front, 0, 45, null); Set(front, 1, 45, null); Set(front, 2, 45, null);
+        Set(front, 0, 46, null); Set(front, 1, 46, null); Set(front, 2, 46, null);
+        Set(front, 0, 47, null); Set(front, 1, 47, null); Set(front, 2, 47, null);
+        Set(front, 0, 48, null); Set(front, 1, 48, null); Set(front, 2, 48, null);
+        Set(front, 0, 49, 413); Set(front, 1, 49, 414); Set(front, 2, 49, 438);
+        Set(front, 0, 50, null); Set(front, 1, 50, null);
+        Set(over, 0, 46, null); Set(over, 1, 46, null); Set(over, 2, 46, null);
+        Set(over, 0, 47, null); Set(over, 1, 47, null); Set(over, 2, 47, null);
+        Set(over, 0, 48, null); Set(over, 1, 48, null); Set(over, 2, 48, null);
+        Set(over, 0, 49, null); Set(over, 1, 49, null); Set(over, 2, 49, null);
+    }
+
 
     /// <summary>Server: the farm's side of the path leads to its quarry; the quarry's right edge leads back.</summary>
     private static void UpdateWarps_Postfix(GameLocation __instance)
