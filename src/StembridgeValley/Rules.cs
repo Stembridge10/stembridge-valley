@@ -29,9 +29,23 @@ internal static class Rules
         Game1.realMilliSecondsPerGameMinute = msPerTen / 10;
         Log.Info($"Day length: {cfg.RealMinutesPerDay} real minutes ({msPerTen / 1000.0:0.#}s per 10 game minutes).");
 
-        // 2. Crops keep growing across seasons.
+        // 2. Crops keep growing across seasons. Regrowing crops (blueberries, corn...) only until their first
+        //    harvest: after that, the next season change that's out of their season ends them, as in vanilla.
         harmony.Patch(AccessTools.Method(typeof(Crop), nameof(Crop.IsInSeason), new[] { typeof(GameLocation) }),
             postfix: new HarmonyMethod(typeof(Rules), nameof(CropInSeason_Postfix)));
+
+        // 2b. Animals don't lose mood or friendship on days none of their farm's players were online.
+        harmony.Patch(AccessTools.Method(typeof(FarmAnimal), nameof(FarmAnimal.dayUpdate)),
+            prefix: new HarmonyMethod(typeof(Rules), nameof(AnimalDay_Prefix)),
+            postfix: new HarmonyMethod(typeof(Rules), nameof(AnimalDay_Postfix)));
+        harmony.Patch(AccessTools.Method(typeof(FarmAnimal), nameof(FarmAnimal.updatePerTenMinutes)),
+            prefix: new HarmonyMethod(typeof(Rules), nameof(AnimalTen_Prefix)),
+            postfix: new HarmonyMethod(typeof(Rules), nameof(AnimalTen_Postfix)));
+        if (SV.Role == Role.Server)
+        {
+            helper.Events.GameLoop.OneSecondUpdateTicked += (_, e) => { if (Context.IsWorldReady && e.IsMultipleOf(60)) NoteOnlineFarms(); };
+            helper.Events.GameLoop.DayStarted += (_, _) => { farmsSeenToday.Clear(); NoteOnlineFarms(); };
+        }
 
         // 3. Friendship doesn't decay.
         harmony.Patch(AccessTools.Method(typeof(Farmer), nameof(Farmer.resetFriendshipsForNewDay)),
@@ -72,10 +86,60 @@ internal static class Rules
 
     // ---------- patches ----------
 
-    private static void CropInSeason_Postfix(ref bool __result)
+    private static void CropInSeason_Postfix(Crop __instance, ref bool __result)
     {
-        if (SV.Config.CropsSurviveSeasonChange)
-            __result = true;
+        if (!SV.Config.CropsSurviveSeasonChange || __result)
+            return;
+        // A regrowing crop is marked fullyGrown from its first harvest on. Once harvested, it ends on the first
+        // day of a season it doesn't grow in (the day the master game runs the season change).
+        __result = !(Game1.dayOfMonth == 1 && __instance.fullyGrown.Value && __instance.RegrowsAfterHarvest());
+    }
+
+    // ---------- animals while the farm is away ----------
+
+    /// <summary>Server: farms that had at least one of their own players online at some point today.</summary>
+    private static readonly HashSet<string> farmsSeenToday = new();
+
+    private static void NoteOnlineFarms()
+    {
+        foreach (Farmer f in Game1.getOnlineFarmers())
+            if (!f.IsMainPlayer && Farms.HomeFarmOf(f) is string home)
+                farmsSeenToday.Add(home);
+    }
+
+    /// <summary>True when the animal lives on a player farm nobody from that farm visited today.</summary>
+    public static bool FarmWasAway(GameLocation? where) =>
+        SV.Role == Role.Server && Farms.Enabled && Farms.FarmOf(where) is { } farm && Farms.IsFarm(farm) && !farmsSeenToday.Contains(farm.Name);
+
+    /// <summary>True when none of the farm's own players is online right now.</summary>
+    public static bool FarmEmptyNow(GameLocation? where) =>
+        SV.Role == Role.Server && Farms.Enabled && Farms.FarmOf(where) is { } farm && Farms.IsFarm(farm) &&
+        !Game1.getOnlineFarmers().Any(f => !f.IsMainPlayer && Farms.HomeFarmOf(f) == farm.Name);
+
+    private static void AnimalTen_Prefix(FarmAnimal __instance, GameLocation environment, out int? __state) =>
+        __state = FarmEmptyNow(environment) ? __instance.happiness.Value : null;
+
+    private static void AnimalTen_Postfix(FarmAnimal __instance, int? __state)
+    {
+        if (__state is int before && __instance.happiness.Value < before)
+            __instance.happiness.Value = before;
+    }
+
+    private static void AnimalDay_Prefix(FarmAnimal __instance, GameLocation environment, out (int Happy, int Friend)? __state)
+    {
+        __state = FarmWasAway(environment) ? (__instance.happiness.Value, __instance.friendshipTowardFarmer.Value) : null;
+    }
+
+    private static void AnimalDay_Postfix(FarmAnimal __instance, (int Happy, int Friend)? __state)
+    {
+        if (__state is not { } before)
+            return;
+        if (__instance.happiness.Value < before.Happy)
+            __instance.happiness.Value = (byte)before.Happy;
+        if (__instance.friendshipTowardFarmer.Value < before.Friend)
+            __instance.friendshipTowardFarmer.Value = before.Friend;
+        if (__instance.moodMessage.Value == 6) // "left outside": nobody was there to close the door
+            __instance.moodMessage.Value = 0;
     }
 
     private static void Friendship_Prefix(Farmer __instance, out Dictionary<string, int>? __state)

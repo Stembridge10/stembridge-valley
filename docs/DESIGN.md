@@ -138,6 +138,13 @@ Server has run a few weeks. Three farms exist; it's Fall, Year 3. The Pantry tow
 - New farms arrive. Town unlocks already apply to them, so they catch up faster; veterans sell them gear on the market.
 
 ## Farm projects (per farm, the 4 players share them)
+**Built (Oct 4, test world):** the projects book opens with P. Each project is a few Community Center-style bundles;
+the farm's players fill them together by clicking a row to give what they carry. The server checks every gift (only
+that farm's players, only what a slot still needs, the right item) and keeps the progress on the farm. When a project
+is done, the server announces it and every member gets the gold and items once. Six named projects (Break Ground,
+First Fields, Livestock, Pantry, Workshop, Wizard's Favor), then endless Farm Orders that grow each time.
+Rewards are extras only; nothing vanilla is locked. Progress is written to state/farm-projects.json for Discord/hiscores.
+The original plan below (unlock-style rewards) is kept for reference; the built version uses item rewards.
 1. Break Ground: wood/stone/fiber. Unlocks Coop and Barn at Robin.
 2. First Fields: a few different crops. Opens more farm land (if the farm map supports staged expansion).
 3. Livestock: eggs, milk, wool. Unlocks bigger animal buildings.
@@ -161,9 +168,11 @@ Farming, skills, professions, tools, mines, fishing, crafting, cooking, shops, a
 
 ## Rule changes this design needs
 - Regrowing crops (blueberries, cranberries, corn, etc.): survive until first harvest, then die at the next season
-  change. The current "crops survive" rule lets them produce forever.
+  change. **Built (Oct 4):** tested across Summer to Fall: a harvested blueberry ends, an unharvested one keeps growing.
 - Starter seeds match the current season.
 - No animal mood or neglect penalty while all 4 of a farm's players are offline. Crops still need sprinklers or rain.
+  **Built (Oct 4):** on a day none of a farm's players came online, its animals keep their mood and friendship
+  (including the evening drain). Tested: the empty farm's chicken stayed happy; the online farm's unpetted one didn't.
 
 ## Anti-cheat rule for every loop
 Anything shared or competitive (rankings, market, contracts, town projects) is scored and stored by the server, never trusted from a player's game. Server keeps an audit log of contributions and trades.

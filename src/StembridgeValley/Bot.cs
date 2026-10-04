@@ -61,6 +61,8 @@ internal static class Bot
             return;
         if (Environment.GetEnvironmentVariable("SV_BOT_QUARRY") == "1" && QuarryCheck())
             return;
+        if (Environment.GetEnvironmentVariable("SV_BOT_PROJECTS") == "1" && ProjectsCheck())
+            return;
 
         nextActionTick = (int)e.Ticks + rng.Next(180, 480); // every 3-8 seconds
         actions++;
@@ -77,6 +79,60 @@ internal static class Bot
         {
             Log.Debug($"[bot] action failed: {ex.Message}");
         }
+    }
+
+    private static int projStage, projWait;
+
+    /// <summary>
+    /// Test of farm projects (SV_BOT_PROJECTS=1; one step every ~3 seconds): gets the first project's items, tries to
+    /// give some to a farm that isn't its own (refused, items come back), then fills every slot and waits for the
+    /// reward. Reports the inventory and progress at each step.
+    /// </summary>
+    private static bool ProjectsCheck()
+    {
+        if (Farms.HomeFarmOf(Game1.player) is not string home)
+            return true;
+        if (FarmMaps.IsPending(Game1.getLocationFromName(home)))
+            return true;
+        if (++projWait < 180)
+            return true;
+        projWait = 0;
+        projStage++;
+        int Wood() => Game1.player.Items.CountId("(O)388");
+        Projects.Progress p = Projects.Read(Game1.getLocationFromName(home));
+        string state = $"wood {Wood()}, gold {Game1.player.Money}, project {p.Current} ({Projects.Get(p.Current).Name}), filled {string.Join(",", p.Filled.Select(kv => kv.Key + "=" + kv.Value))}";
+        Log.Info($"[projects] step {projStage} on {home}: {state}; last reply: {Projects.LastReply}");
+        switch (projStage)
+        {
+            case 1:
+                Log.Info($"[projects] empty-handed try: {Projects.Offer(home, 0, 0) ?? "sent"}");
+                foreach (var (id, n) in new[] { ("388", 110), ("709", 10), ("390", 100), ("378", 20), ("771", 50), ("92", 25) })
+                    Game1.player.addItemToInventoryBool(ItemRegistry.Create("(O)" + id, n));
+                break;
+            case 2:
+                string other = Farms.AllNames.First(f => f != home);
+                Log.Info($"[projects] giving wood to {other} (not mine): {Projects.Offer(other, 0, 0) ?? "sent"}");
+                break;
+            case 3:
+            case 8:
+                Game1.activeClickableMenu = new Projects.ProjectMenu(home);
+                Snapshot($"projects-{projStage}.png", Game1.player.TilePoint.X, Game1.player.TilePoint.Y, 1280, 720);
+                Game1.activeClickableMenu = null;
+                break;
+            case 4:
+                for (int b = 0; b < 3; b++)
+                    for (int sl = 0; sl < 2; sl++)
+                        Log.Info($"[projects] give bundle {b} slot {sl}: {Projects.Offer(home, b, sl) ?? "sent"}");
+                break;
+            case 6:
+                Log.Info($"[projects] give again to a full slot: {Projects.Offer(home, 0, 0) ?? "sent"}");
+                break;
+            case 9:
+                Log.Info($"[projects] DONE-CHECK claimed={Game1.player.modData.GetValueOrDefault("SV.ProjectsClaimed." + home)} sprinklers={Game1.player.Items.CountId("(O)599")} fertilizer={Game1.player.Items.CountId("(O)368")}");
+                Game1.activeClickableMenu = null;
+                break;
+        }
+        return true;
     }
 
     private static int doorStage, doorWait;
