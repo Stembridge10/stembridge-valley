@@ -20,7 +20,7 @@ namespace StembridgeValley;
 ///             25/40        double catch (5/10%)
 ///   Foraging  15/25/45     wild forage on your farm each day (2/4/6)  20/40  double forage (10/20%)
 ///             35           rare mushrooms among it
-///   Combat    15           bus pass: the desert bus runs for you      20/30/40/50  +1 defense each
+///   Combat    15           bus pass: free rides to the desert        20/30/40/50  +1 defense each
 ///             25/35/45     +1 attack each
 /// </summary>
 internal static class SkillPerks
@@ -57,7 +57,7 @@ internal static class SkillPerks
         },
         [Skills.Combat] = new()
         {
-            [15] = "Bus pass: the desert bus runs for you, even before it's repaired",
+            [15] = "Bus pass: free rides to the desert (runs even if the bus isn't repaired)",
             [20] = "+1 defense",
             [25] = "+1 attack",
             [30] = "+1 defense",
@@ -166,25 +166,21 @@ internal static class SkillPerks
 
     // ---------- Combat ----------
 
-    /// <summary>Combat 15+: the desert bus runs for you even while it's out of service (normal ticket price).</summary>
+    /// <summary>
+    /// Combat 15+: a bus pass. Rides to the desert are free, and the bus runs for you even if the town's bus
+    /// isn't repaired yet (on worlds where the town isn't finished).
+    /// </summary>
     private static bool BusStop_Prefix(BusStop __instance, xTile.Dimensions.Location tileLocation)
     {
-        if (__instance.getTileIndexAt(tileLocation, "Buildings", "outdoors") != 1057 || Game1.MasterPlayer.mailReceived.Contains("ccVault"))
+        if (__instance.getTileIndexAt(tileLocation, "Buildings", "outdoors") != 1057 || Lvl(Skills.Combat) < BusPassLevel)
+            return true; // vanilla: paid ticket, or "out of service"
+        if (Game1.player.isRidingHorse() && Game1.player.mount != null)
             return true;
-        if (Lvl(Skills.Combat) < BusPassLevel)
-            return true; // vanilla "out of service"
-        __instance.createQuestionDialogue($"Your bus pass works here. Take the bus to the Calico Desert? ({__instance.TicketPrice}g)",
+        __instance.createQuestionDialogue("Your bus pass works here. Ride to the Calico Desert for free?",
             __instance.createYesNoResponses(), (who, answer) =>
             {
-                if (answer != "Yes")
-                    return;
-                if (Game1.player.Money < __instance.TicketPrice)
-                {
-                    Game1.drawObjectDialogue(Game1.content.LoadString("Strings\\Locations:BusStop_NotEnoughMoneyForTicket"));
-                    return;
-                }
-                Game1.player.Money -= __instance.TicketPrice;
-                Game1.warpFarmer("Desert", 35, 43, flip: false); // where the Desert totem lands; the bus home is at the stop
+                if (answer == "Yes")
+                    Game1.warpFarmer("Desert", 35, 43, flip: false); // where the Desert totem lands; the bus home is at the stop
             });
         return false;
     }

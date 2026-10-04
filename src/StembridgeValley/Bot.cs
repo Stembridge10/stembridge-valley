@@ -45,6 +45,12 @@ internal static class Bot
         if (!Context.IsWorldReady)
             return;
         ClearPopups();
+        if (Environment.GetEnvironmentVariable("SV_BOT_TOWN") == "1" && Game1.eventUp && Game1.CurrentEvent is { } ev && e.IsMultipleOf(120))
+        {
+            Log.Info($"[town] cutscene {ev.id} is playing in {Game1.currentLocation?.Name}; skipping it");
+            if (ev.skippable) ev.skipEvent(); else Game1.CurrentEvent.endBehaviors();
+            return;
+        }
         if (pendingHomeCheck != null && Context.IsPlayerFree && Game1.locationRequest == null)
         {
             homeTrips++;
@@ -62,6 +68,8 @@ internal static class Bot
         if (Environment.GetEnvironmentVariable("SV_BOT_QUARRY") == "1" && QuarryCheck())
             return;
         if (Environment.GetEnvironmentVariable("SV_BOT_PROJECTS") == "1" && ProjectsCheck())
+            return;
+        if (Environment.GetEnvironmentVariable("SV_BOT_TOWN") == "1" && TownCheck())
             return;
 
         nextActionTick = (int)e.Ticks + rng.Next(180, 480); // every 3-8 seconds
@@ -130,6 +138,63 @@ internal static class Bot
             case 9:
                 Log.Info($"[projects] DONE-CHECK claimed={Game1.player.modData.GetValueOrDefault("SV.ProjectsClaimed." + home)} sprinklers={Game1.player.Items.CountId("(O)599")} fertilizer={Game1.player.Items.CountId("(O)368")}");
                 Game1.activeClickableMenu = null;
+                break;
+        }
+        return true;
+    }
+
+    private static int townStage, townWait;
+
+    /// <summary>
+    /// Test of the finished town (SV_BOT_TOWN=1; one step every ~3 seconds): reads the host's town flags, then visits
+    /// the bus stop, the Community Center, the mountain bridge and the beach bridge, logging what the game reports
+    /// and taking a picture at each.
+    /// </summary>
+    private static bool TownCheck()
+    {
+        if (Farms.HomeFarmOf(Game1.player) is not string home || FarmMaps.IsPending(Game1.getLocationFromName(home)))
+            return true;
+        if (Game1.activeClickableMenu != null || Game1.eventUp)
+        {
+            if (Game1.eventUp)
+                Log.Info($"[town] a cutscene is playing: {Game1.CurrentEvent?.id}");
+            Game1.activeClickableMenu?.exitThisMenu(false);
+            return true;
+        }
+        if (++townWait < 180)
+            return true;
+        townWait = 0;
+        townStage++;
+        var m = Game1.MasterPlayer.mailReceived;
+        switch (townStage)
+        {
+            case 1:
+                Log.Info($"[town] host flags: cc complete={m.Contains("ccIsComplete")} vault={m.Contains("ccVault")} boiler={m.Contains("ccBoilerRoom")} "
+                    + $"crafts={m.Contains("ccCraftsRoom")} pantry={m.Contains("ccPantry")} fish={m.Contains("ccFishTank")} bulletin={m.Contains("ccBulletin")} "
+                    + $"theater={m.Contains("ccMovieTheater")}; my ceremony seen={Game1.player.eventsSeen.Contains("191393")}");
+                // The copper pan scene (plays once on the mountain after the fish tank room) needs clicks; real players click through.
+                Game1.player.eventsSeen.Add("404798");
+                Game1.warpFarmer("BusStop", 22, 10, 2);
+                break;
+            case 2:
+                Snapshot("town-bus.png", 18, 8);
+                Log.Info($"[town] at {Game1.currentLocation.Name}; bus desert ticket open={Game1.MasterPlayer.mailReceived.Contains("ccVault")}");
+                Game1.warpFarmer("Town", 52, 24, 0);
+                break;
+            case 3:
+                Snapshot("town-cc.png", 52, 18);
+                Log.Info($"[town] at {Game1.currentLocation.Name} ({Game1.player.TilePoint}); cutscene={Game1.eventUp}");
+                Game1.warpFarmer("Mountain", 50, 26, 2);
+                break;
+            case 4:
+                Snapshot("town-mountain.png", 54, 24);
+                Log.Info($"[town] at {Game1.currentLocation.Name}");
+                Game1.warpFarmer("Beach", 56, 13, 2);
+                break;
+            case 5:
+                Snapshot("town-beach.png", 58, 13);
+                Log.Info($"[town] at {Game1.currentLocation.Name}; beach bridge fixed={(Game1.currentLocation as StardewValley.Locations.Beach)?.bridgeFixed.Value}");
+                Log.Info("[town] DONE");
                 break;
         }
         return true;

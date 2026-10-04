@@ -50,6 +50,9 @@ public sealed class ServerConfig
     public int FarmType { get; set; } = 0;
     /// <summary>Ask the router to open the game port automatically (UPnP). Harmless if the router says no.</summary>
     public bool TryAutomaticPortForward { get; set; } = true;
+
+    /// <summary>The Community Center starts finished, so every town repair is open from day one.</summary>
+    public bool TownComplete { get; set; } = true;
 }
 
 internal static class Log

@@ -32,6 +32,7 @@ internal sealed class ModEntry : Mod
 
         var harmony = new Harmony(ModManifest.UniqueID);
         Rules.Apply(helper, harmony);
+        Town.Apply(helper);
         Network.Apply(harmony);
         Farms.Apply(helper, harmony);
         FarmMaps.Apply(helper, harmony);
