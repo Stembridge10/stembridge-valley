@@ -214,6 +214,7 @@ internal static class Network
         if (hasCharacter)
             return;
         InvitedFarmByConnection.TryGetValue(connectionId, out string? invited);
+        invited = Control.JoinFarmFor(key) ?? invited; // a launcher invite code is the newest choice
         string? farm = FarmRoster.PlaceNewPlayer(key, invited);
         if (farm == null)
         {

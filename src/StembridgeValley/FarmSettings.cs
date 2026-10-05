@@ -181,7 +181,7 @@ internal static class FarmSettings
     }
 
     /// <summary>Server: apply a name from the owner. Returns why not, or null when done.</summary>
-    private static string? SetName(string farm, string playerKey, string? raw, bool firstTimeOnly)
+    internal static string? SetName(string farm, string playerKey, string? raw, bool firstTimeOnly)
     {
         if (Find(farm) is not { } loc || FarmRoster.Members(farm).FirstOrDefault() != playerKey)
             return "Only the farm's owner can name it.";
@@ -198,7 +198,7 @@ internal static class FarmSettings
         return null;
     }
 
-    private static string? SetClosed(string farm, string playerKey, bool closed)
+    internal static string? SetClosed(string farm, string playerKey, bool closed)
     {
         if (Find(farm) is not { } loc || FarmRoster.Members(farm).FirstOrDefault() != playerKey)
             return "Only the farm's owner can do that.";

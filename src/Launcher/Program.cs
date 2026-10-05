@@ -133,7 +133,16 @@ internal static class Program
             ui.Progress(null);
             ClearFlags();
 
-            // 5. Play
+            // 5. Play (first time round: the Ready screen, with My farm)
+            if (attempt == 0 && !args.Contains("--no-ready"))
+            {
+                var farm = FarmClient.CanUse(settings.Password) ? new FarmClient(settings.Address, settings.Password) : null;
+                if (!await ui.Ready(farm))
+                {
+                    Say("Closed from the Ready screen.");
+                    return 0;
+                }
+            }
             ui.Status("Starting Stardew Valley...");
             Say("Starting Stardew Valley...");
             var started = DateTime.UtcNow;

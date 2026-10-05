@@ -11,15 +11,15 @@ namespace StembridgeValley.Launcher;
 internal sealed class LauncherWindow : Form, IUi
 {
     // "Starlit Hollow" palette (owner-approved).
-    private static readonly Color Night = Color.FromArgb(0x19, 0x17, 0x28);    // window background
-    private static readonly Color Dusk = Color.FromArgb(0x28, 0x22, 0x3E);     // header band, main button text
-    private static readonly Color Field = Color.FromArgb(0x22, 0x1F, 0x36);    // text box / progress track
-    private static readonly Color Ivory = Color.FromArgb(0xF4, 0xEC, 0xDD);    // main text
-    private static readonly Color Lilac = Color.FromArgb(0xB9, 0xAE, 0xCB);    // muted text, borders
-    private static readonly Color Lavender = Color.FromArgb(0xB8, 0xA0, 0xDE); // main button
-    private static readonly Color LavenderHi = Color.FromArgb(0xCB, 0xB8, 0xEA);
-    private static readonly Color Gold = Color.FromArgb(0xE4, 0xBE, 0x66);     // accent
-    private static readonly Color Rose = Color.FromArgb(0xF2, 0xA7, 0xA0);     // problem hints
+    private static Color Night => Palette.Night;
+    private static Color Dusk => Palette.Dusk;
+    private static Color Field => Palette.Field;
+    private static Color Ivory => Palette.Ivory;
+    private static Color Lilac => Palette.Lilac;
+    private static Color Lavender => Palette.Lavender;
+    private static Color LavenderHi => Palette.LavenderHi;
+    private static Color Gold => Palette.Gold;
+    private static Color Rose => Palette.Rose;
 
     private readonly Label title = new(), detail = new(), hint = new();
     private readonly ProgressStrip bar = new();
@@ -85,7 +85,7 @@ internal sealed class LauncherWindow : Form, IUi
         buttons.Controls.AddRange(new Control[] { primary, secondary, browse });
         primary.Click += (_, _) => Answer(box.Visible ? box.Text : "yes");
         secondary.Click += (_, _) => Answer(null);
-        browse.Click += (_, _) => Browse();
+        browse.Click += (_, _) => { if (farm != null && answer != null && readyShowing) OpenFarm(); else Browse(); };
 
         Controls.AddRange(new Control[] { title, detail, bar, box, hint, buttons });
         ShowButtons();
@@ -120,19 +120,7 @@ internal sealed class LauncherWindow : Form, IUi
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        // Dark title bar in the header's dusk purple (Windows 11; older Windows just keeps its own).
-        try
-        {
-            int on = 1;
-            DwmSetWindowAttribute(Handle, 20, ref on, sizeof(int));                // dark mode caption buttons
-            int caption = Dusk.R | Dusk.G << 8 | Dusk.B << 16;
-            DwmSetWindowAttribute(Handle, 35, ref caption, sizeof(int));           // caption color
-            int text = Lilac.R | Lilac.G << 8 | Lilac.B << 16;
-            DwmSetWindowAttribute(Handle, 36, ref text, sizeof(int));              // caption text color
-            int border = Dusk.R | Dusk.G << 8 | Dusk.B << 16;
-            DwmSetWindowAttribute(Handle, 34, ref border, sizeof(int));            // window border color
-        }
-        catch { }
+        Theme.DarkTitle(Handle);
     }
 
     // ---------- IUi ----------
@@ -200,6 +188,37 @@ internal sealed class LauncherWindow : Form, IUi
         else ShowButtons(("Close", false));
     }, "problem") != null;
 
+    private FarmClient? farm;
+    private bool readyShowing;
+
+    public async Task<bool> Ready(FarmClient? farmClient)
+    {
+        farm = farmClient;
+        bool play = await Ask(() =>
+        {
+            readyShowing = true;
+            title.Text = "Ready to play";
+            detail.Text = farm != null
+                ? "Your mods are up to date. Press Play to join, or open My farm to rename it, invite a friend, or see who lives there."
+                : "Your mods are up to date. Press Play to join the server.";
+            hint.Text = "";
+            box.Visible = false;
+            bar.Visible = false;
+            if (farm != null) ShowButtons(("Play", true), ("Close", false), ("My farm", null));
+            else ShowButtons(("Play", true), ("Close", false));
+        }, "ready") != null;
+        readyShowing = false;
+        return play;
+    }
+
+    private void OpenFarm()
+    {
+        if (farm == null) return;
+        using var w = new FarmWindow(farm, shotsDir == null ? null : Path.Combine(shotsDir, "farm"), autopilot != null);
+        w.ShowDialog(this);
+        if (autopilot != null) primary.PerformClick();
+    }
+
     public void Playing() => Ui(() =>
     {
         title.Text = "Have fun!";
@@ -246,6 +265,8 @@ internal sealed class LauncherWindow : Form, IUi
             t.Stop();
             if (kind == "invite") { box.Text = NextScripted(); primary.PerformClick(); }
             else if (kind == "confirm") primary.PerformClick();
+            else if (kind == "ready" && farm != null && Environment.GetEnvironmentVariable("SV_LAUNCHER_FARM_TOUR") == "1") OpenFarm();
+            else if (kind == "ready") primary.PerformClick();
             else Answer(null);
         };
         t.Start();

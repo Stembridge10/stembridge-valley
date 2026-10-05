@@ -88,6 +88,14 @@ internal static class Discord
         return true;
     }
 
+    /// <summary>Discord display name for a player key (discord-ID), if the bot has given them a code.</summary>
+    public static string? NameOf(string key)
+    {
+        Reload();
+        string id = key.StartsWith(KeyPrefix) ? key[KeyPrefix.Length..] : key;
+        return roster.Tokens.Values.FirstOrDefault(p => p.Id == id)?.Name;
+    }
+
     public static bool TrySplit(string code, out string id, out string token)
     {
         id = token = "";

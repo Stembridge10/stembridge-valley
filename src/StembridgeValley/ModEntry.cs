@@ -50,6 +50,7 @@ internal sealed class ModEntry : Mod
         if (SV.Role == Role.Server)
         {
             Server.Apply(helper, harmony);
+            Control.Apply(helper, harmony);
             Discord.Apply(helper);
             Perf.Apply(helper);
         }

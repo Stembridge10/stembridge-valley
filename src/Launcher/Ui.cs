@@ -15,6 +15,8 @@ internal interface IUi
     Task<bool> Confirm(string title, string text, string yes);
     /// <summary>Show a problem. Returns true if the player pressed Try again.</summary>
     Task<bool> Problem(string title, string text, bool canRetry);
+    /// <summary>Everything is set up: "play" to start, "farm" never returns (the window handles it), null if closed.</summary>
+    Task<bool> Ready(FarmClient? farm);
     /// <summary>The game is running.</summary>
     void Playing();
     /// <summary>Everything finished; the window can close.</summary>
@@ -50,6 +52,7 @@ internal sealed class ConsoleUi : IUi
         say($"{title}: {text}");
         return Task.FromResult(false);
     }
+    public Task<bool> Ready(FarmClient? farm) => Task.FromResult(true);
     public void Playing() => say("Have fun!");
     public void Done(string text) => say(text);
 }
