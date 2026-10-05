@@ -443,9 +443,10 @@ Set(back, 0, 26, 351); Set(back, 1, 26, 351); Set(back, 2, 26, 351); Set(back, 3
         Set(back, 0, 40, 351); Set(back, 1, 40, 351); Set(back, 2, 40, 351); Set(back, 3, 40, 351);
         Set(back, 0, 41, 351); Set(back, 1, 41, 351); Set(back, 2, 41, 351); Set(back, 3, 41, 351);
         Set(back, 0, 42, 351); Set(back, 1, 42, 351); Set(back, 2, 42, 351); Set(back, 3, 42, 351);
-        Set(buildings, 1, 34, 16); Set(buildings, 2, 34, 444);
-        Set(buildings, 1, 35, 468); Set(buildings, 2, 35, 468); Set(buildings, 3, 35, 494);
-        Set(buildings, 1, 36, 492); Set(buildings, 2, 36, 493); Set(buildings, 3, 36, 544);
+        Set(buildings, 2, 33, 296);
+        Set(buildings, 1, 34, 16); Set(buildings, 2, 34, 321);
+        Set(buildings, 1, 35, 468); Set(buildings, 2, 35, 346);
+        Set(buildings, 1, 36, 492); Set(buildings, 2, 36, 494);
         Set(buildings, 1, 37, 517); Set(buildings, 2, 37, 519);
         Set(buildings, 1, 38, 542); Set(buildings, 2, 38, 544);
         Set(buildings, 0, 39, null); Set(buildings, 1, 39, null); Set(buildings, 2, 39, null);
