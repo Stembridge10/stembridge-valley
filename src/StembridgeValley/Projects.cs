@@ -196,7 +196,11 @@ internal static class Projects
             helper.Events.Input.ButtonPressed += (_, e) =>
             {
                 if (Context.IsWorldReady && e.Button == Hotkey && Game1.activeClickableMenu == null && Farms.HomeFarmOf(Game1.player) is string home)
+                {
+                    // Swallow the key: otherwise the new menu receives this same press and closes itself at once.
+                    helper.Input.Suppress(e.Button);
                     Game1.activeClickableMenu = new ProjectMenu(home);
+                }
             };
             helper.Events.GameLoop.OneSecondUpdateTicked += (_, e) => { if (Context.IsWorldReady && e.IsMultipleOf(120)) ClaimRewards(); };
         }

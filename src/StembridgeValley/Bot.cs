@@ -51,6 +51,9 @@ internal static class Bot
             if (ev.skippable) ev.skipEvent(); else Game1.CurrentEvent.endBehaviors();
             return;
         }
+        // Runs before the "player is free" check: a menu being open is exactly what it looks for.
+        if (Environment.GetEnvironmentVariable("SV_BOT_HOTKEYS") == "1" && HotkeyCheck(e.Ticks))
+            return;
         if (pendingHomeCheck != null && Context.IsPlayerFree && Game1.locationRequest == null)
         {
             homeTrips++;
@@ -209,6 +212,46 @@ internal static class Bot
     /// (tabs, Wizard locked), tries Wizard's Favor (refused), fills First Fields, waits for the greenhouse, walks in
     /// through its door, plants an out-of-season crop inside, and walks back out. Pictures on the way.
     /// </summary>
+    private static int hkStage, hkAt;
+    private static readonly SButton[] HkKeys = { SButton.L, SButton.L, SButton.P, SButton.P };
+
+    /// <summary>
+    /// Test of the menu hotkeys (SV_BOT_HOTKEYS=1): presses L and P the way a real keyboard does (through SMAPI's
+    /// input override, so both the mod and the game see the press) and reports which menu is open a second later.
+    /// Each key is pressed twice: the first should open its menu, the second should close it.
+    /// </summary>
+    private static bool HotkeyCheck(uint ticks)
+    {
+        if (Farms.HomeFarmOf(Game1.player) is not string home || Game1.getLocationFromName(home) is not { } farm || FarmMaps.IsPending(farm))
+            return true;
+        if (Game1.activeClickableMenu is DialogueBox || Game1.eventUp)
+        {
+            Game1.activeClickableMenu?.exitThisMenu(false);
+            return true;
+        }
+        if (hkStage >= HkKeys.Length * 3)
+        {
+            if (hkStage++ == HkKeys.Length * 3) Log.Info("[hk] DONE");
+            return true;
+        }
+        if (ticks < hkAt)
+            return true;
+        // SMAPI's input class is internal, so call its OverrideButton by reflection.
+        var press = Game1.input.GetType().GetMethod("OverrideButton")!;
+        int key = hkStage / 3;
+        switch (hkStage % 3)
+        {
+            case 0: press.Invoke(Game1.input, new object[] { HkKeys[key], true }); hkAt = (int)ticks + 6; break;   // press, hold ~0.1s
+            case 1: press.Invoke(Game1.input, new object[] { HkKeys[key], false }); hkAt = (int)ticks + 60; break; // release, wait 1s
+            case 2:
+                Log.Info($"[hk] after pressing {HkKeys[key]} (#{key % 2 + 1}): menu = {Game1.activeClickableMenu?.GetType().Name ?? "none"}");
+                hkAt = (int)ticks + 60;
+                break;
+        }
+        hkStage++;
+        return true;
+    }
+
     private static bool GreenhouseCheck()
     {
         if (Farms.HomeFarmOf(Game1.player) is not string home || Game1.getLocationFromName(home) is not { } farm || FarmMaps.IsPending(farm))

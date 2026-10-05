@@ -121,7 +121,9 @@ HOW_TO = (
     "**How to play**\n"
     "1. Download **Play-Junimo-Hollow.exe**: https://github.com/Stembridge10/stembridge-valley/releases/latest\n"
     "2. Open it and paste your code when it asks. It sets up everything else for you (including SMAPI, the mod loader).\n"
+    "   If Windows shows a blue \"Windows protected your PC\" box, click **More info**, then **Run anyway**. You only see it once.\n"
     "You just need Stardew Valley on PC.\n"
+    "In game: press **P** for your farm's projects and **L** for your collection log.\n"
     "Keep your code to yourself: it's your character's key."
 )
 

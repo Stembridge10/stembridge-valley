@@ -42,7 +42,11 @@ internal static class Collection
     private static void ButtonPressed(object? sender, ButtonPressedEventArgs e)
     {
         if (SV.Role == Role.Client && Context.IsWorldReady && e.Button == Hotkey && Game1.activeClickableMenu == null)
+        {
+            // Swallow the key: otherwise the new menu receives this same press and closes itself at once.
+            Helper.Input.Suppress(e.Button);
             Game1.activeClickableMenu = new LogMenu();
+        }
     }
 
     private static void Tick(object? sender, OneSecondUpdateTickedEventArgs e)
