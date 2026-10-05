@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stembridge Valley Discord bot.
+"""Junimo Hollow Discord bot.
 
 /play            -> privately sends the member their personal invite code (same code every time).
                     A new player gets a farm of their own.
@@ -119,7 +119,7 @@ tree = app_commands.CommandTree(client)
 
 HOW_TO = (
     "**How to play**\n"
-    "1. Download **Play-Stembridge-Valley.exe**: https://github.com/Stembridge10/stembridge-valley/releases/latest\n"
+    "1. Download **Play-Junimo-Hollow.exe**: https://github.com/Stembridge10/stembridge-valley/releases/latest\n"
     "2. You need Stardew Valley (PC) and SMAPI (https://smapi.io).\n"
     "3. Run the launcher and paste your code when it asks.\n"
     "Keep your code to yourself: it's your character's key."
@@ -151,10 +151,10 @@ def allowed(inter):
     return allowed_guild(inter.guild)
 
 
-@tree.command(name="play", description="Get your personal Stembridge Valley invite code (sent privately).")
+@tree.command(name="play", description="Get your personal Junimo Hollow invite code (sent privately).")
 async def play(inter: discord.Interaction):
     if not allowed(inter):
-        await inter.response.send_message("Use this in the Stembridge Valley Discord server.", ephemeral=True)
+        await inter.response.send_message("Use this in the Junimo Hollow Discord server.", ephemeral=True)
         return
     tok = ensure_player(inter.user)
     data = load()
@@ -175,7 +175,7 @@ async def play(inter: discord.Interaction):
 @app_commands.describe(friend="Who to invite. They must not have made a farmer yet.")
 async def invite(inter: discord.Interaction, friend: discord.Member):
     if not allowed(inter):
-        await inter.response.send_message("Use this in the Stembridge Valley Discord server.", ephemeral=True)
+        await inter.response.send_message("Use this in the Junimo Hollow Discord server.", ephemeral=True)
         return
     status = farms()
     fid, farm, _ = farm_of(inter.user.id, status)
@@ -207,7 +207,7 @@ async def invite(inter: discord.Interaction, friend: discord.Member):
 @tree.command(name="farm", description="See who lives on your farm.")
 async def farm_cmd(inter: discord.Interaction):
     if not allowed(inter):
-        await inter.response.send_message("Use this in the Stembridge Valley Discord server.", ephemeral=True)
+        await inter.response.send_message("Use this in the Junimo Hollow Discord server.", ephemeral=True)
         return
     fid, farm, _ = farm_of(inter.user.id)
     if not farm:
@@ -223,7 +223,7 @@ async def farm_cmd(inter: discord.Interaction):
 @tree.command(name="newcode", description="Replace your invite code (if someone else saw it).")
 async def newcode(inter: discord.Interaction):
     if not allowed(inter):
-        await inter.response.send_message("Use this in the Stembridge Valley Discord server.", ephemeral=True)
+        await inter.response.send_message("Use this in the Junimo Hollow Discord server.", ephemeral=True)
         return
     tok = ensure_player(inter.user, fresh=True)
     await inter.response.send_message(
@@ -275,7 +275,7 @@ def owned_farm(uid):
 @app_commands.describe(name='New name, e.g. "Sunny Acres" (shows as "Sunny Acres Farm").')
 async def farmname(inter: discord.Interaction, name: str):
     if not allowed(inter):
-        await inter.response.send_message("Use this in the Stembridge Valley Discord server.", ephemeral=True)
+        await inter.response.send_message("Use this in the Junimo Hollow Discord server.", ephemeral=True)
         return
     fid, farm = owned_farm(inter.user.id)
     if not fid:
@@ -299,7 +299,7 @@ async def farmname(inter: discord.Interaction, name: str):
 @app_commands.choices(setting=[app_commands.Choice(name="open", value="open"), app_commands.Choice(name="closed", value="closed")])
 async def visitors(inter: discord.Interaction, setting: app_commands.Choice[str]):
     if not allowed(inter):
-        await inter.response.send_message("Use this in the Stembridge Valley Discord server.", ephemeral=True)
+        await inter.response.send_message("Use this in the Junimo Hollow Discord server.", ephemeral=True)
         return
     fid, farm = owned_farm(inter.user.id)
     if not fid:

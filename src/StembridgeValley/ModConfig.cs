@@ -40,7 +40,7 @@ public sealed class ModConfig
 
 public sealed class ServerConfig
 {
-    public string FarmName { get; set; } = "Stembridge Valley";
+    public string FarmName { get; set; } = "Junimo Hollow";
     public int StartingCabins { get; set; } = 3;
     /// <summary>Separate 4-player farms in the shared world. 0 = classic single shared farm.</summary>
     public int FarmCount { get; set; } = 5;

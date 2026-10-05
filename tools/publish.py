@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish a new Stembridge Valley release to GitHub.
+"""Publish a new Junimo Hollow release to GitHub.
 
   publish.py v0.1.2 [--notes "what changed"]
 
@@ -35,8 +35,8 @@ def main():
     assert pack["url"].endswith("/mods.zip") and len(pack["sha256"]) == 64
 
     run([DOTNET, "publish", "-c", "Release", "-o", str(out / "launcher")], cwd=REPO / "src/Launcher", stdout=subprocess.DEVNULL)
-    launcher = out / "Play-Stembridge-Valley.exe"  # GitHub turns spaces in asset names into dots
-    shutil.move(str(out / "launcher" / "Play Stembridge Valley.exe"), launcher)
+    launcher = out / "Play-Junimo-Hollow.exe"  # GitHub turns spaces in asset names into dots
+    shutil.move(str(out / "launcher" / "Play Junimo Hollow.exe"), launcher)
     shutil.rmtree(out / "launcher")
 
     run([DOTNET, "build", "-c", "Release", "-r", "win-x64", "--self-contained", "false"], cwd=REPO / "src/Host", stdout=subprocess.DEVNULL)
@@ -73,7 +73,7 @@ def main():
         return
     assets = [out / "mods.zip", out / "pack.json", launcher, server_zip, linux_tar, out / "SHA256SUMS.txt"]
     run(["gh", "release", "create", version, *map(str, assets), "--repo", OWNER_REPO,
-         "--title", f"Stembridge Valley {version}", "--notes", notes, "--latest"])
+         "--title", f"Junimo Hollow {version}", "--notes", notes, "--latest"])
     print(f"\nPublished {version}. Players get it automatically next time they launch.")
 
 

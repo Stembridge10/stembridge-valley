@@ -1,9 +1,9 @@
 @echo off
-title Stembridge Valley server
+title Junimo Hollow server
 setlocal EnableDelayedExpansion
 set "DIR=%LOCALAPPDATA%\StembridgeValley-Server"
 echo.
-echo ===== Stembridge Valley server =====
+echo ===== Junimo Hollow server =====
 tasklist /fi "imagename eq SVHost.exe" | find /i "SVHost.exe" >nul && (echo Running: yes) || (echo Running: NO - double-click "Start Server")
 if exist "%DIR%\state\server-status.txt" type "%DIR%\state\server-status.txt"
 echo.

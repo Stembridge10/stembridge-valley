@@ -151,7 +151,7 @@ internal static class Network
             inviteOk = !Farms.Enabled || FarmRoster.TryReadInvite(password, out password, out invitedFarm);
         if (tag != SV.HailTag || !inviteOk || !string.Equals(password, SV.Password, StringComparison.Ordinal) || key.Length < 8)
         {
-            Log.Warn($"Turned away {who}: wrong password or not using the Stembridge Valley launcher.");
+            Log.Warn($"Turned away {who}: wrong password or not using the Junimo Hollow launcher.");
             __instance.Deny(SV.DenyBadPassword);
             return false;
         }

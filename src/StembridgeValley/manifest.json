@@ -1,8 +1,8 @@
 {
-  "Name": "Stembridge Valley",
+  "Name": "Junimo Hollow",
   "Author": "Stembridge",
   "Version": "0.1.0",
-  "Description": "Shared-world rules and server connection for Stembridge Valley.",
+  "Description": "Shared-world rules and server connection for Junimo Hollow.",
   "UniqueID": "Stembridge.StembridgeValley",
   "EntryDll": "StembridgeValley.dll",
   "MinimumApiVersion": "4.0.0",

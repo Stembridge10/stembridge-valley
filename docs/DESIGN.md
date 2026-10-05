@@ -1,4 +1,4 @@
-# Stembridge Valley: game design plan
+# Junimo Hollow: game design plan
 
 Owner decisions (Oct 2026). Stardew farming stays the core; MMO loops sit on top.
 Status: progression drafted; calendar, marriage and festival decisions made Oct 2 (below).

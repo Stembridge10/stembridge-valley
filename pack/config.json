@@ -10,7 +10,7 @@
   "CropsSurviveSeasonChange": true,
   "NoFriendshipDecay": true,
   "Server": {
-    "FarmName": "Stembridge Valley",
+    "FarmName": "Junimo Hollow",
     "StartingCabins": 3,
     "FarmType": 0,
     "TryAutomaticPortForward": true

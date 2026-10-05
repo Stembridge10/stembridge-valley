@@ -134,7 +134,7 @@ internal static class FarmRoster
         string host = Environment.GetEnvironmentVariable("SV_PUBLIC_ADDRESS") is { Length: > 0 } a ? a : "<server-address>:24642";
         var lines = new List<string>
         {
-            "Stembridge Valley invites. Keep these private.",
+            "Junimo Hollow invites. Keep these private.",
             "",
             $"Open invite (gives a new player a farm of their own):",
             $"  sv:{host}/{SV.Password}",

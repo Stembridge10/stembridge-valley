@@ -22,11 +22,11 @@ internal sealed class ModEntry : Mod
 
         if (SV.Role == Role.None)
         {
-            Monitor.Log("Not started by the Stembridge Valley launcher; staying off.", LogLevel.Info);
+            Monitor.Log("Not started by the Junimo Hollow launcher; staying off.", LogLevel.Info);
             return;
         }
 
-        Monitor.Log($"Stembridge Valley {ModManifest.Version} as {SV.Role}, pack {SV.PackVersion}.", LogLevel.Info);
+        Monitor.Log($"Junimo Hollow {ModManifest.Version} as {SV.Role}, pack {SV.PackVersion}.", LogLevel.Info);
         if (string.IsNullOrEmpty(SV.Password))
             Monitor.Log("No server password set.", LogLevel.Warn);
 

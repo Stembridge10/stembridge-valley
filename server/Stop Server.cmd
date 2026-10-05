@@ -1,5 +1,5 @@
 @echo off
-title Stembridge Valley server
+title Junimo Hollow server
 echo stop> "%LOCALAPPDATA%\StembridgeValley-Server\stop.flag"
 echo Stopping the server (it saves at the start of each in-game day)...
 timeout /t 8 /nobreak >nul

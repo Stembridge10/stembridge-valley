@@ -430,7 +430,7 @@ internal static class Server
                     Log.Info("Automatic port opening isn't available (router UPnP off). Use the manual router steps.");
                     return;
                 }
-                bool ok = lidgren.UPnP.ForwardPort(24642, "Stembridge Valley");
+                bool ok = lidgren.UPnP.ForwardPort(24642, "Junimo Hollow");
                 var external = ok ? lidgren.UPnP.GetExternalIP() : null;
                 Log.Info(ok
                     ? $"Router opened port 24642 automatically. Public address: {external}"

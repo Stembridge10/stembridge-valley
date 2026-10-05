@@ -1,11 +1,11 @@
-# Stembridge Valley
+# Junimo Hollow
 
 A small test of a shared, always-on Stardew Valley world: one server running on Stembridge's PC, friends join by address.
 
 ## For players
 
 1. Install Stardew Valley and [SMAPI](https://smapi.io) (the normal mod loader).
-2. Download **Play-Stembridge-Valley.exe** from the [latest release](https://github.com/Stembridge10/stembridge-valley/releases/latest).
+2. Download **Play-Junimo-Hollow.exe** from the [latest release](https://github.com/Stembridge10/stembridge-valley/releases/latest).
 3. Run it and paste the invite code Stembridge sent you (looks like `sv:1.2.3.4:24642/acorn-berry-fig-42`).
 4. Pick a free cabin and make your farmer. Next time, just run the launcher again.
 

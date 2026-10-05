@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
     <OutputType>Exe</OutputType>
-    <AssemblyName>Play Stembridge Valley</AssemblyName>
+    <AssemblyName>Play Junimo Hollow</AssemblyName>
     <RootNamespace>StembridgeValley.Launcher</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

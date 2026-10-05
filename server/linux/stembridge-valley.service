@@ -1,5 +1,5 @@
 [Unit]
-Description=Stembridge Valley (Stardew Valley shared world server)
+Description=Junimo Hollow (Stardew Valley shared world server)
 After=network-online.target
 Wants=network-online.target
 

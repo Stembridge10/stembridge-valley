@@ -15,7 +15,7 @@ internal sealed class LauncherSettings
 }
 
 /// <summary>
-/// "Play Stembridge Valley": keeps its own Mods folder in sync with the published pack,
+/// "Play Junimo Hollow": keeps its own Mods folder in sync with the published pack,
 /// starts Stardew through SMAPI with that folder (the player's normal Mods/Vortex setup is never touched),
 /// and joins the server automatically. If the server has a newer pack, it updates and rejoins.
 /// </summary>
@@ -32,7 +32,7 @@ internal static class Program
 
     private static int Main(string[] args)
     {
-        Console.Title = "Stembridge Valley";
+        Console.Title = "Junimo Hollow";
         Console.OutputEncoding = Encoding.UTF8;
         Directory.CreateDirectory(Root);
         log = new StreamWriter(Path.Combine(Root, "launcher.log"), append: false) { AutoFlush = true };
@@ -92,7 +92,7 @@ internal static class Program
             if (File.Exists(Path.Combine(StateDir, "bad-password.txt")))
             {
                 Say("The server didn't accept your code.");
-                Say("Get a fresh one: type /play in the Stembridge Valley Discord.");
+                Say("Get a fresh one: type /play in the Junimo Hollow Discord.");
                 AskForInvite(settings, null);
                 Save(settings);
                 attempt = -1; // fresh code: start over
@@ -101,7 +101,7 @@ internal static class Program
             string extraMods = Path.Combine(StateDir, "extra-mods.txt");
             if (File.Exists(extraMods))
             {
-                Say("The server only allows the Stembridge Valley mod pack, and your game had extra mods:");
+                Say("The server only allows the Junimo Hollow mod pack, and your game had extra mods:");
                 Say("  " + File.ReadAllText(extraMods).Trim());
                 Say($"Remove them from {Path.Combine(Root, "Mods")} and start the launcher again.");
                 Pause();
@@ -147,7 +147,7 @@ internal static class Program
             if (invite == null)
             {
                 Say("Paste your invite code, then press Enter.");
-                Say("(Get yours by typing /play in the Stembridge Valley Discord. It starts with  sv: )");
+                Say("(Get yours by typing /play in the Junimo Hollow Discord. It starts with  sv: )");
                 Console.Write("> ");
                 invite = Console.ReadLine();
             }
@@ -219,7 +219,7 @@ internal static class Program
     private static void Banner()
     {
         Say("==============================");
-        Say("      Stembridge Valley");
+        Say("      Junimo Hollow");
         Say("==============================");
     }
 

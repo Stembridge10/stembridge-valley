@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a Stembridge Valley mod pack: Mods/ zip + pack.json (version, url, sha256).
+"""Build a Junimo Hollow mod pack: Mods/ zip + pack.json (version, url, sha256).
 
 Usage: build_pack.py <version> <out_dir> [--url-base URL]
   Without --url-base the pack.json points at the local zip (for tests).

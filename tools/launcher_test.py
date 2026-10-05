@@ -11,7 +11,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 LAB = Path("/mnt/c/Users/Stembridge/hermes-work/StembridgeValley/launcher-test")
 LABW = r"C:\Users\Stembridge\hermes-work\StembridgeValley\launcher-test"
-LAUNCHER = REPO / "out/launcher/Play Stembridge Valley.exe"
+LAUNCHER = REPO / "out/launcher/Play Junimo Hollow.exe"
 FAKE = REPO / "tests/FakeSmapi/bin/Release/net8.0/win-x64"
 REAL_MODS = Path("/mnt/c/Program Files (x86)/Steam/steamapps/common/Stardew Valley/Mods")
 results = {}

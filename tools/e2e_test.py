@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end test of Stembridge Valley on this PC, fully hidden and silent.
+"""End-to-end test of Junimo Hollow on this PC, fully hidden and silent.
 
 Runs a fresh hidden server and hidden test players (each on its own private desktop,
 own saves, no sound, no Steam), with 2-minute days, and checks:

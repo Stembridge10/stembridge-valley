@@ -57,7 +57,7 @@ internal static class Join
     private static void Connect()
     {
         attempts++;
-        Log.Info(attempts == 1 ? $"Connecting to Stembridge Valley at {SV.Address}..." : $"Reconnecting to {SV.Address} (try {attempts})...");
+        Log.Info(attempts == 1 ? $"Connecting to Junimo Hollow at {SV.Address}..." : $"Reconnecting to {SV.Address} (try {attempts})...");
         var multiplayer = (Multiplayer)AccessTools.Field(typeof(Game1), "multiplayer").GetValue(null)!;
         Client client = multiplayer.InitClient(new LidgrenClient(SV.Address));
         var title = (TitleMenu)Game1.activeClickableMenu;
