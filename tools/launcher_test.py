@@ -29,8 +29,9 @@ def check(name, ok, detail=""):
 def snapshot(d: Path):
     h = hashlib.sha256()
     # Top level + one level down (every mod's folder and manifest) is enough to notice any install/change.
+    # Skips config.json: mods rewrite their own settings while the owner is playing, which isn't the launcher.
     for f in sorted(list(d.iterdir()) + [g for x in d.iterdir() if x.is_dir() for g in x.iterdir()]):
-        if True:
+        if f.name != "config.json":
             st = f.stat()
             h.update(f"{f.relative_to(d)}|{st.st_size}|{int(st.st_mtime)}".encode())
     return h.hexdigest()
@@ -38,7 +39,7 @@ def snapshot(d: Path):
 
 def run_launcher(root: Path, *args):
     env = dict(os.environ, SV_LAUNCHER_ROOT=w(root), WSLENV="SV_LAUNCHER_ROOT")
-    return subprocess.run([str(LAUNCHER), *args], env=env, input="",
+    return subprocess.run([str(LAUNCHER), "--headless", *args], env=env, input="",
                           capture_output=True, text=True, timeout=180)
 
 

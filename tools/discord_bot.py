@@ -120,8 +120,8 @@ tree = app_commands.CommandTree(client)
 HOW_TO = (
     "**How to play**\n"
     "1. Download **Play-Junimo-Hollow.exe**: https://github.com/Stembridge10/stembridge-valley/releases/latest\n"
-    "2. You need Stardew Valley (PC) and SMAPI (https://smapi.io).\n"
-    "3. Run the launcher and paste your code when it asks.\n"
+    "2. Open it and paste your code when it asks. It sets up everything else for you (including SMAPI, the mod loader).\n"
+    "You just need Stardew Valley on PC.\n"
     "Keep your code to yourself: it's your character's key."
 )
 

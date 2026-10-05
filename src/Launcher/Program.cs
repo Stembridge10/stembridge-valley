@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Windows.Forms;
 using StembridgeValley.Shared;
 
 namespace StembridgeValley.Launcher;
@@ -15,9 +16,10 @@ internal sealed class LauncherSettings
 }
 
 /// <summary>
-/// "Play Junimo Hollow": keeps its own Mods folder in sync with the published pack,
-/// starts Stardew through SMAPI with that folder (the player's normal Mods/Vortex setup is never touched),
-/// and joins the server automatically. If the server has a newer pack, it updates and rejoins.
+/// "Play Junimo Hollow": finds the game, installs SMAPI if it's missing, keeps its own Mods folder in sync
+/// with the published pack, starts Stardew through SMAPI with that folder (the player's normal Mods/Vortex
+/// setup is never touched), and joins the server. If the server has a newer pack, it updates and rejoins.
+/// Shows a small friendly window; --headless runs the same steps as plain text (automated tests).
 /// </summary>
 internal static class Program
 {
@@ -27,73 +29,128 @@ internal static class Program
         : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StembridgeValley");
     private static readonly string SettingsPath = Path.Combine(Root, "launcher.json");
     private static readonly string StateDir = Path.Combine(Root, "state");
+    private static readonly string LogPath = Path.Combine(Root, "launcher.log");
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNameCaseInsensitive = true };
     private static StreamWriter? log;
+    private static bool headless;
 
+    [STAThread]
     private static int Main(string[] args)
     {
-        Console.Title = "Junimo Hollow";
-        Console.OutputEncoding = Encoding.UTF8;
+        // Elevated helper (started by SmapiSetup when the game folder needs admin rights): copy, then exit.
+        if (args.Length == 3 && args[0] == "--copy-smapi")
+        {
+            try { SmapiSetup.CopyInto(args[1], args[2], _ => { }); return 0; }
+            catch { return 1; }
+        }
+        headless = args.Contains("--headless");
         Directory.CreateDirectory(Root);
-        log = new StreamWriter(Path.Combine(Root, "launcher.log"), append: false) { AutoFlush = true };
+        log = new StreamWriter(LogPath, append: false) { AutoFlush = true };
+
+        if (headless)
+        {
+            try { Console.OutputEncoding = Encoding.UTF8; } catch (IOException) { } // no console window (piped)
+            var console = new ConsoleUi(Say);
+            return Guarded(console, args).GetAwaiter().GetResult();
+        }
+
+        ApplicationConfiguration.Initialize();
+        var window = new LauncherWindow();
+        int result = 1;
+        window.Shown += (_, _) => Task.Run(async () =>
+        {
+            result = await Guarded(window, args);
+            window.Done("");
+        });
+        Application.Run(window);
+        return result;
+    }
+
+    private static async Task<int> Guarded(IUi ui, string[] args)
+    {
         try
         {
-            return Run(args);
+            return await Run(ui, args);
         }
         catch (Exception ex)
         {
-            log.WriteLine(ex);
-            Say("");
-            Say("Something went wrong: " + ex.Message);
-            Say("Send Stembridge the file: " + Path.Combine(Root, "launcher.log"));
-            Pause();
+            log?.WriteLine(ex);
+            await ui.Problem("Something went wrong",
+                ex.Message + "\n\nIf it keeps happening, send Stembridge this file: " + LogPath, canRetry: false);
             return 1;
         }
     }
 
-    private static int Run(string[] args)
+    private static async Task<int> Run(IUi ui, string[] args)
     {
-        Banner();
+        Say("Junimo Hollow launcher");
         var settings = Load();
 
+        // 1. Invite code
         string? invite = args.FirstOrDefault(a => a.StartsWith("sv:", StringComparison.OrdinalIgnoreCase));
         if (args.Contains("--reset") || invite != null || string.IsNullOrWhiteSpace(settings.Address))
-            AskForInvite(settings, invite);
+            if (!await GetInvite(ui, settings, invite, null))
+                return 3;
         if (string.IsNullOrWhiteSpace(settings.PlayerKey))
             settings.PlayerKey = Guid.NewGuid().ToString("N");
 
+        // 2. Game folder
+        ui.Status("Looking for Stardew Valley...");
         if (!GameFinder.IsGameFolder(settings.GamePath))
-            settings.GamePath = GameFinder.Find() ?? AskForGameFolder();
-        Save(settings);
-
-        if (!GameFinder.HasSmapi(settings.GamePath))
         {
-            Say("SMAPI (the Stardew mod loader) isn't installed yet.");
-            Say("Install it from https://smapi.io, then run this launcher again.");
-            TryOpen("https://smapi.io");
-            Pause();
+            string? found = GameFinder.Find();
+            string? problem = null;
+            while (found == null)
+            {
+                string? path = (await ui.AskGameFolder(problem))?.Trim().Trim('"');
+                if (path == null)
+                    return 3;
+                if (GameFinder.IsGameFolder(path))
+                    found = path;
+                else
+                    problem = "That folder doesn't have Stardew Valley in it. Try again.";
+            }
+            settings.GamePath = found;
+        }
+        Save(settings);
+        Say("Game: " + settings.GamePath);
+
+        // 3. SMAPI (the mod loader)
+        if (!await EnsureSmapi(ui, settings.GamePath))
             return 2;
+        if (args.Contains("--setup-only"))
+        {
+            Say("Setup finished.");
+            return 0;
         }
 
         for (int attempt = 0; attempt < 3; attempt++)
         {
-            string version = PackSync.EnsureAsync(settings.Feed, Root, Say).GetAwaiter().GetResult();
+            // 4. Mods
+            ui.Status("Checking for mod updates...");
+            ui.Progress(-1);
+            string version = await PackSync.EnsureAsync(settings.Feed, Root, m => { Say(m); ui.Status("Getting the mods ready...", m); });
+            ui.Progress(null);
             ClearFlags();
 
+            // 5. Play
+            ui.Status("Starting Stardew Valley...");
             Say("Starting Stardew Valley...");
-            int code = Launch(settings, version);
+            var started = DateTime.UtcNow;
+            int code = Launch(settings, version, ui);
 
             if (File.Exists(Path.Combine(StateDir, "update-needed.txt")))
             {
                 Say("The server has newer mods. Updating, then joining again...");
+                ui.Status("The server has newer mods", "Updating them, then joining again...");
                 Thread.Sleep(3000); // the published pack can lag the server by a moment
                 continue;
             }
             if (File.Exists(Path.Combine(StateDir, "bad-password.txt")))
             {
                 Say("The server didn't accept your code.");
-                Say("Get a fresh one: type /play in the Junimo Hollow Discord.");
-                AskForInvite(settings, null);
+                if (!await GetInvite(ui, settings, null, "The server didn't accept that code. Type /play in Discord for a fresh one."))
+                    return 3;
                 Save(settings);
                 attempt = -1; // fresh code: start over
                 continue;
@@ -101,31 +158,125 @@ internal static class Program
             string extraMods = Path.Combine(StateDir, "extra-mods.txt");
             if (File.Exists(extraMods))
             {
-                Say("The server only allows the Junimo Hollow mod pack, and your game had extra mods:");
-                Say("  " + File.ReadAllText(extraMods).Trim());
-                Say($"Remove them from {Path.Combine(Root, "Mods")} and start the launcher again.");
-                Pause();
+                string list = File.ReadAllText(extraMods).Trim();
+                Say("Extra mods: " + list);
+                await ui.Problem("The server only allows its own mods",
+                    $"These extra mods were found: {list}\n\nRemove them from {Path.Combine(Root, "Mods")} and start the launcher again.", false);
                 return 5;
             }
+            if (code != 0 && DateTime.UtcNow - started < TimeSpan.FromMinutes(2))
+            {
+                Say($"Stardew closed early (code {code}).");
+                if (await ui.Problem("Stardew Valley closed unexpectedly",
+                        "It stopped while starting up. Its log is in %AppData%\\StardewValley\\ErrorLogs\\SMAPI-latest.txt if Stembridge needs it.", canRetry: true))
+                {
+                    attempt = -1;
+                    continue;
+                }
+                return code;
+            }
             Say(code == 0 ? "See you next time!" : $"Stardew closed (code {code}).");
-            Thread.Sleep(1500);
             return code;
         }
-        Say("Still out of date after updating. Tell Stembridge: the server's mods may be newer than the published pack.");
-        Pause();
+        Say("Still out of date after updating.");
+        await ui.Problem("Couldn't get the newest mods",
+            "The server's mods are newer than the ones published for download. Tell Stembridge, then try again in a few minutes.", false);
         return 4;
     }
 
-    private static int Launch(LauncherSettings settings, string version)
+    // ---------- steps ----------
+
+    private static async Task<bool> GetInvite(IUi ui, LauncherSettings settings, string? invite, string? problem)
+    {
+        while (true)
+        {
+            invite ??= await ui.AskInvite(problem);
+            if (invite == null)
+                return false;
+            if (TryParseInvite(invite, out string address, out string password))
+            {
+                settings.Address = address;
+                settings.Password = password;
+                Save(settings);
+                Say($"Got it. Server: {address}");
+                return true;
+            }
+            Say("That doesn't look like an invite code.");
+            if (headless && Console.IsInputRedirected && invite.Length == 0)
+                return false; // test with no keyboard: don't loop forever
+            problem = "That doesn't look like an invite code. It should start with sv:";
+            invite = null;
+        }
+    }
+
+    private static async Task<bool> EnsureSmapi(IUi ui, string gameDir)
+    {
+        var want = SmapiTarget();
+        if (!SmapiSetup.NeedsInstall(gameDir, want, out var have))
+        {
+            Say($"SMAPI {have?.ToString(3)} found.");
+            return true;
+        }
+        Say(have == null ? "SMAPI not installed." : $"SMAPI {have.ToString(3)} is too old (need {want.MinVersion}).");
+        bool ok = await ui.Confirm(
+            have == null ? "One-time setup: install SMAPI" : "One-time setup: update SMAPI",
+            "Junimo Hollow needs SMAPI, the free mod loader almost every Stardew mod uses. "
+            + "We'll download the official version and set it up for you. Your saves and any mods you already have stay as they are.",
+            have == null ? "Install" : "Update");
+        if (!ok)
+        {
+            Say("SMAPI install declined.");
+            return false;
+        }
+        while (true)
+        {
+            try
+            {
+                while (SmapiSetup.IsGameRunning(gameDir))
+                    if (!await ui.Problem("Please close Stardew Valley first", "SMAPI can't be installed while the game is open.", canRetry: true))
+                        return false;
+                ui.Status("Setting up SMAPI...", "Downloading the official installer from smapi.io's GitHub.");
+                await SmapiSetup.InstallAsync(want, gameDir, Root,
+                    m => { Say(m); ui.Status("Setting up SMAPI...", m); },
+                    p => ui.Progress(p));
+                ui.Progress(null);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                log?.WriteLine(ex);
+                ui.Progress(null);
+                Say("SMAPI install failed: " + ex.Message);
+                if (!await ui.Problem("Couldn't install SMAPI",
+                        ex.Message + "\n\nYou can also install it yourself from smapi.io, then start this launcher again.", canRetry: true))
+                    return false;
+            }
+        }
+    }
+
+    /// <summary>The SMAPI release to install. Tests can point this at a local copy of the same official zip.</summary>
+    private static SmapiInfo SmapiTarget()
+    {
+        var t = SmapiSetup.Pinned;
+        string? url = Environment.GetEnvironmentVariable("SV_SMAPI_URL"), sha = Environment.GetEnvironmentVariable("SV_SMAPI_SHA256");
+        if (!string.IsNullOrEmpty(url) && sha?.Length == 64)
+            t = new SmapiInfo { Version = t.Version, Url = url, Sha256 = sha, MinVersion = t.MinVersion };
+        return t;
+    }
+
+    private static int Launch(LauncherSettings settings, string version, IUi ui)
     {
         var start = new ProcessStartInfo
         {
             FileName = Path.Combine(settings.GamePath, "StardewModdingAPI.exe"),
             WorkingDirectory = settings.GamePath,
             UseShellExecute = false,
+            CreateNoWindow = !headless, // no black SMAPI console; the game window still opens
         };
         start.ArgumentList.Add("--mods-path");
         start.ArgumentList.Add(Path.Combine(Root, "Mods"));
+        if (!headless)
+            start.ArgumentList.Add("--no-terminal");
         start.Environment["SV_ROLE"] = "client";
         start.Environment["SV_ADDRESS"] = settings.Address;
         start.Environment["SV_PASSWORD"] = settings.Password;
@@ -133,34 +284,10 @@ internal static class Program
         start.Environment["SV_PACK_VERSION"] = version;
         start.Environment["SV_STATE_DIR"] = StateDir;
         using var game = Process.Start(start) ?? throw new Exception("Couldn't start SMAPI.");
-        Say("Have fun! (You can minimise this window.)");
+        Say("Have fun!");
+        ui.Playing();
         game.WaitForExit();
         return game.ExitCode;
-    }
-
-    // ---------- setup ----------
-
-    private static void AskForInvite(LauncherSettings settings, string? invite)
-    {
-        while (true)
-        {
-            if (invite == null)
-            {
-                Say("Paste your invite code, then press Enter.");
-                Say("(Get yours by typing /play in the Junimo Hollow Discord. It starts with  sv: )");
-                Console.Write("> ");
-                invite = Console.ReadLine();
-            }
-            if (TryParseInvite(invite, out string address, out string password))
-            {
-                settings.Address = address;
-                settings.Password = password;
-                Say($"Got it. Server: {address}");
-                return;
-            }
-            Say("That doesn't look like an invite code. Try again.");
-            invite = null;
-        }
     }
 
     /// <summary>Invite format: sv:host:port/password</summary>
@@ -179,19 +306,6 @@ internal static class Program
         if (!address.Contains(':'))
             address += ":24642";
         return true;
-    }
-
-    private static string AskForGameFolder()
-    {
-        while (true)
-        {
-            Say("Couldn't find Stardew Valley. Paste its install folder (the one with \"Stardew Valley.exe\"):");
-            Console.Write("> ");
-            string? path = Console.ReadLine()?.Trim().Trim('"');
-            if (GameFinder.IsGameFolder(path))
-                return path!;
-            Say("That folder doesn't have the game in it.");
-        }
     }
 
     // ---------- helpers ----------
@@ -216,29 +330,11 @@ internal static class Program
             File.Delete(Path.Combine(StateDir, f));
     }
 
-    private static void Banner()
-    {
-        Say("==============================");
-        Say("      Junimo Hollow");
-        Say("==============================");
-    }
-
     private static void Say(string message)
     {
-        Console.WriteLine(message);
-        log?.WriteLine($"[{DateTime.Now:HH:mm:ss}] {message}");
-    }
-
-    private static void Pause()
-    {
-        if (Console.IsInputRedirected)
-            return; // automated test or no keyboard: don't hang
-        Say("Press Enter to close.");
-        Console.ReadLine();
-    }
-
-    private static void TryOpen(string url)
-    {
-        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
+        if (headless)
+            Console.WriteLine(message);
+        lock (Json)
+            log?.WriteLine($"[{DateTime.Now:HH:mm:ss}] {message}");
     }
 }

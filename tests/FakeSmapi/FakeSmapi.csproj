@@ -6,5 +6,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
+    <Version>4.5.2</Version>
   </PropertyGroup>
 </Project>
