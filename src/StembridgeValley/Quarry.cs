@@ -49,8 +49,9 @@ internal static class Quarry
         new("Maps\\Farm_Fishing", Row(-1, 36, 38), new(1, 37), 3, new(0, 36, 6, 3), new(0, 35, 14, 5)),
         // Forest: a gap in the canopy where the woods meet the left edge.
         new("Maps\\Farm_Foraging", Row(-1, 27, 29), new(1, 28), 3, new(0, 27, 7, 3), new(0, 26, 14, 5)),
-        // Hill-top: the grass shelf between the two left rock walls opens to the edge.
-        new("Maps\\Farm_Mining", Row(-1, 39, 42), new(1, 40), 3, new(0, 39, 4, 4), new(0, 38, 12, 6)),
+        // Hill-top: the grass shelf between the two left rock walls opens to the edge (upper wall ends
+        // in a copy of the Wilderness farm's slope-into-block corner, so rows 37-38 are open grass too).
+        new("Maps\\Farm_Mining", Row(-1, 37, 42), new(1, 40), 3, new(0, 37, 4, 6), new(0, 37, 12, 7)),
         // Wilderness: the north cliff carries on to the edge and the canyon floor runs off under it.
         new("Maps\\Farm_Combat", Row(-1, 34, 41), new(1, 37), 3, new(0, 34, 6, 8), new(0, 34, 14, 8)),
         // Four Corners: a rock-ledge opening in the west grass bank, like the standard farm's.
@@ -434,21 +435,24 @@ Set(back, 0, 26, 351); Set(back, 1, 26, 351); Set(back, 2, 26, 351); Set(back, 3
             return;
         void Set(Layer layer, int x, int y, int? index) =>
             layer.Tiles[x, y] = index is int i ? new StaticTile(layer, s, BlendMode.Alpha, i) : null;
-        Set(back, 2, 33, 351);
-        Set(back, 2, 34, 351);
-        Set(back, 2, 35, 351);
-        Set(back, 2, 36, 351);
-        Set(back, 3, 38, 351);
+        Set(back, 0, 32, 351); Set(back, 1, 32, 351); Set(back, 2, 32, 351);
+        Set(back, 0, 33, 351); Set(back, 1, 33, 351); Set(back, 2, 33, 351);
+        Set(back, 0, 34, 351); Set(back, 1, 34, 351); Set(back, 2, 34, 351);
+        Set(back, 0, 35, 351); Set(back, 1, 35, 351); Set(back, 2, 35, 351);
+        Set(back, 0, 36, 351); Set(back, 1, 36, 351); Set(back, 2, 36, 351);
+        Set(back, 0, 37, 351); Set(back, 1, 37, 351); Set(back, 2, 37, 351);
+        Set(back, 0, 38, 351); Set(back, 1, 38, 351); Set(back, 2, 38, 351); Set(back, 3, 38, 351);
         Set(back, 0, 39, 351); Set(back, 1, 39, 351); Set(back, 2, 39, 351); Set(back, 3, 39, 351);
         Set(back, 0, 40, 351); Set(back, 1, 40, 351); Set(back, 2, 40, 351); Set(back, 3, 40, 351);
         Set(back, 0, 41, 351); Set(back, 1, 41, 351); Set(back, 2, 41, 351); Set(back, 3, 41, 351);
         Set(back, 0, 42, 351); Set(back, 1, 42, 351); Set(back, 2, 42, 351); Set(back, 3, 42, 351);
-        Set(buildings, 2, 33, 296);
-        Set(buildings, 1, 34, 16); Set(buildings, 2, 34, 321);
-        Set(buildings, 1, 35, 468); Set(buildings, 2, 35, 346);
-        Set(buildings, 1, 36, 492); Set(buildings, 2, 36, 494);
-        Set(buildings, 1, 37, 517); Set(buildings, 2, 37, 519);
-        Set(buildings, 1, 38, 542); Set(buildings, 2, 38, 544);
+        Set(buildings, 0, 32, 434); Set(buildings, 1, 32, 125); Set(buildings, 2, 32, null);
+        Set(buildings, 0, 33, 446); Set(buildings, 1, 33, 468); Set(buildings, 2, 33, 446);
+        Set(buildings, 0, 34, 492); Set(buildings, 1, 34, 493); Set(buildings, 2, 34, 492);
+        Set(buildings, 0, 35, 517); Set(buildings, 1, 35, 518); Set(buildings, 2, 35, 346);
+        Set(buildings, 0, 36, 542); Set(buildings, 1, 36, 543); Set(buildings, 2, 36, 544);
+        Set(buildings, 0, 37, null); Set(buildings, 1, 37, null); Set(buildings, 2, 37, null);
+        Set(buildings, 0, 38, null); Set(buildings, 1, 38, null); Set(buildings, 2, 38, null);
         Set(buildings, 0, 39, null); Set(buildings, 1, 39, null); Set(buildings, 2, 39, null);
         Set(buildings, 0, 40, null); Set(buildings, 1, 40, null); Set(buildings, 2, 40, null);
         Set(buildings, 0, 41, null); Set(buildings, 1, 41, null); Set(buildings, 2, 41, null);
