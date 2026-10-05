@@ -71,6 +71,8 @@ internal static class Bot
             return;
         if (Environment.GetEnvironmentVariable("SV_BOT_TOWN") == "1" && TownCheck())
             return;
+        if (Environment.GetEnvironmentVariable("SV_BOT_GREENHOUSE") == "1" && GreenhouseCheck())
+            return;
 
         nextActionTick = (int)e.Ticks + rng.Next(180, 480); // every 3-8 seconds
         actions++;
@@ -108,18 +110,18 @@ internal static class Bot
         projStage++;
         int Wood() => Game1.player.Items.CountId("(O)388");
         Projects.Progress p = Projects.Read(Game1.getLocationFromName(home));
-        string state = $"wood {Wood()}, gold {Game1.player.Money}, project {p.Current} ({Projects.Get(p.Current).Name}), filled {string.Join(",", p.Filled.Select(kv => kv.Key + "=" + kv.Value))}";
+        string state = $"wood {Wood()}, gold {Game1.player.Money}, done [{string.Join(",", p.Done)}], filled {string.Join(",", p.Filled.Select(kv => kv.Key + "=" + kv.Value))}";
         Log.Info($"[projects] step {projStage} on {home}: {state}; last reply: {Projects.LastReply}");
         switch (projStage)
         {
             case 1:
-                Log.Info($"[projects] empty-handed try: {Projects.Offer(home, 0, 0) ?? "sent"}");
+                Log.Info($"[projects] empty-handed try: {Projects.Offer(home, 0, 0, 0) ?? "sent"}");
                 foreach (var (id, n) in new[] { ("388", 110), ("709", 10), ("390", 100), ("378", 20), ("771", 50), ("92", 25) })
                     Game1.player.addItemToInventoryBool(ItemRegistry.Create("(O)" + id, n));
                 break;
             case 2:
                 string other = Farms.AllNames.First(f => f != home);
-                Log.Info($"[projects] giving wood to {other} (not mine): {Projects.Offer(other, 0, 0) ?? "sent"}");
+                Log.Info($"[projects] giving wood to {other} (not mine): {Projects.Offer(other, 0, 0, 0) ?? "sent"}");
                 break;
             case 3:
             case 8:
@@ -130,10 +132,10 @@ internal static class Bot
             case 4:
                 for (int b = 0; b < 3; b++)
                     for (int sl = 0; sl < 2; sl++)
-                        Log.Info($"[projects] give bundle {b} slot {sl}: {Projects.Offer(home, b, sl) ?? "sent"}");
+                        Log.Info($"[projects] give bundle {b} slot {sl}: {Projects.Offer(home, 0, b, sl) ?? "sent"}");
                 break;
             case 6:
-                Log.Info($"[projects] give again to a full slot: {Projects.Offer(home, 0, 0) ?? "sent"}");
+                Log.Info($"[projects] give again to a full slot: {Projects.Offer(home, 0, 0, 0) ?? "sent"}");
                 break;
             case 9:
                 Log.Info($"[projects] DONE-CHECK claimed={Game1.player.modData.GetValueOrDefault("SV.ProjectsClaimed." + home)} sprinklers={Game1.player.Items.CountId("(O)599")} fertilizer={Game1.player.Items.CountId("(O)368")}");
@@ -195,6 +197,106 @@ internal static class Bot
                 Snapshot("town-beach.png", 58, 13);
                 Log.Info($"[town] at {Game1.currentLocation.Name}; beach bridge fixed={(Game1.currentLocation as StardewValley.Locations.Beach)?.bridgeFixed.Value}");
                 Log.Info("[town] DONE");
+                break;
+        }
+        return true;
+    }
+
+    private static int ghStage, ghWait;
+
+    /// <summary>
+    /// Test of First Fields and the farm greenhouse (SV_BOT_GREENHOUSE=1; one step every ~3 seconds): opens the book
+    /// (tabs, Wizard locked), tries Wizard's Favor (refused), fills First Fields, waits for the greenhouse, walks in
+    /// through its door, plants an out-of-season crop inside, and walks back out. Pictures on the way.
+    /// </summary>
+    private static bool GreenhouseCheck()
+    {
+        if (Farms.HomeFarmOf(Game1.player) is not string home || Game1.getLocationFromName(home) is not { } farm || FarmMaps.IsPending(farm))
+            return true;
+        if (Game1.activeClickableMenu is DialogueBox || Game1.eventUp)
+        {
+            Game1.activeClickableMenu?.exitThisMenu(false);
+            return true;
+        }
+        if (++ghWait < 180)
+            return true;
+        ghWait = 0;
+        ghStage++;
+        Projects.Progress p = Projects.Read(farm);
+        var gh = Greenhouses.Of(farm);
+        Log.Info($"[gh] step {ghStage} at {Game1.currentLocation.Name} {Game1.player.TilePoint}; done [{string.Join(",", p.Done)}]; greenhouse {(gh == null ? "none" : $"{gh.tileX.Value},{gh.tileY.Value} inside {gh.GetIndoorsName()}")}; last reply: {Projects.LastReply}");
+        switch (ghStage)
+        {
+            case 1:
+                foreach (var (id, n) in new[] { ("24", 15), ("400", 10), ("16", 15), ("768", 30), ("479", 5), ("(T)Hoe", 1) })
+                    Game1.player.addItemToInventoryBool(ItemRegistry.Create(id.StartsWith("(") ? id : "(O)" + id, n));
+                Game1.activeClickableMenu = new Projects.ProjectMenu(home);
+                Snapshot("gh-book-open.png", Game1.player.TilePoint.X, Game1.player.TilePoint.Y, 1280, 720);
+                Log.Info($"[gh] book opened on tab {((Projects.ProjectMenu)Game1.activeClickableMenu).Shown}");
+                Game1.activeClickableMenu = null;
+                break;
+            case 2:
+                Log.Info($"[gh] give to Wizard's Favor now: {Projects.Offer(home, Projects.WizardsFavor, 0, 0) ?? "sent"}");
+                Game1.activeClickableMenu = new Projects.ProjectMenu(home, Projects.WizardsFavor);
+                Snapshot("gh-book-wizard.png", Game1.player.TilePoint.X, Game1.player.TilePoint.Y, 1280, 720);
+                Game1.activeClickableMenu = new Projects.ProjectMenu(home, Projects.FirstFields);
+                Snapshot("gh-book-fields.png", Game1.player.TilePoint.X, Game1.player.TilePoint.Y, 1280, 720);
+                Game1.activeClickableMenu = null;
+                break;
+            case 3:
+                for (int bu = 0; bu < 3; bu++)
+                    Log.Info($"[gh] give First Fields bundle {bu}: {Projects.Offer(home, Projects.FirstFields, bu, 0) ?? "sent"}");
+                break;
+            case 6:
+                if (gh == null)
+                {
+                    ghStage--; // wait for it
+                    break;
+                }
+                Game1.warpFarmer(home, gh.tileX.Value + gh.humanDoor.X, gh.tileY.Value + gh.humanDoor.Y + 2, 0);
+                break;
+            case 7:
+                if (gh == null) break;
+                Snapshot("gh-outside.png", gh.tileX.Value + 3, gh.tileY.Value + 3);
+                Log.Info($"[gh] in front of the door; unlocked look={(farm as Farm)?.greenhouseUnlocked.Value}; book reply: {Projects.LastReply}");
+                // Walk in through the door like a player (action button on the door tile).
+                var door = new xTile.Dimensions.Location(gh.tileX.Value + gh.humanDoor.X, gh.tileY.Value + gh.humanDoor.Y);
+                bool used = Game1.currentLocation.checkAction(door, Game1.viewport, Game1.player);
+                Log.Info($"[gh] used the door: {used}");
+                break;
+            case 9:
+            {
+                var here = Game1.currentLocation;
+                Log.Info($"[gh] inside: {here.NameOrUniqueName} greenhouse={here.IsGreenhouse} parent={here.GetParentLocation()?.Name} ignoresSeasons={here.SeedsIgnoreSeasonsHere()}");
+                // Plant summer melon seeds in spring, on the first tillable tile.
+                var tile = Enumerable.Range(0, here.map.Layers[0].LayerWidth).SelectMany(x => Enumerable.Range(0, here.map.Layers[0].LayerHeight).Select(y => new Vector2(x, y)))
+                    .FirstOrDefault(v => here.doesTileHaveProperty((int)v.X, (int)v.Y, "Diggable", "Back") != null && !here.terrainFeatures.ContainsKey(v), new Vector2(-1, -1));
+                if (tile.X >= 0)
+                {
+                    var dirt = new StardewValley.TerrainFeatures.HoeDirt(0, here);
+                    here.terrainFeatures[tile] = dirt;
+                    bool planted = dirt.plant("479", Game1.player, false);
+                    Log.Info($"[gh] planted melon at {tile} in {Game1.season}: {planted}; in season here: {dirt.crop?.IsInSeason(here)}");
+                    Game1.player.Position = (tile + new Vector2(0, 2)) * 64;
+                    Snapshot("gh-inside.png", (int)tile.X, (int)tile.Y + 2);
+                }
+                else
+                    Log.Info("[gh] no tillable tile inside!");
+                var exit = here.warps.FirstOrDefault();
+                Log.Info($"[gh] door out leads to {exit?.TargetName} {exit?.TargetX},{exit?.TargetY}");
+                if (exit != null)
+                    Game1.warpFarmer(exit.TargetName, exit.TargetX, exit.TargetY, 2);
+                break;
+            }
+            case 10:
+                Game1.activeClickableMenu = new Projects.ProjectMenu(home);
+                Snapshot("gh-book-after.png", Game1.player.TilePoint.X, Game1.player.TilePoint.Y, 1280, 720);
+                Log.Info($"[gh] book after: opens on tab {((Projects.ProjectMenu)Game1.activeClickableMenu).Shown}; First Fields gives again: {Projects.Offer(home, Projects.FirstFields, 0, 0) ?? "sent"}");
+                Game1.activeClickableMenu = null;
+                break;
+            case 11:
+                Log.Info($"[gh] back at {Game1.currentLocation.Name} {Game1.player.TilePoint}; world greenhouse belongs to: {Game1.locations.FirstOrDefault(l => l.buildings.Any(x => x.HasIndoorsName("Greenhouse")))?.Name ?? "-"}");
+                Log.Info($"[gh] DONE sprinklers={Game1.player.Items.CountId("(O)621")}");
                 break;
         }
         return true;

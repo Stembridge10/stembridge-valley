@@ -41,6 +41,7 @@ internal sealed class ModEntry : Mod
         Collection.Apply(helper, harmony);
         Pets.Apply(helper, harmony);
         Projects.Apply(helper, harmony);
+        Greenhouses.Apply(helper, harmony);
         Quarry.Apply(helper, harmony);
         SkillPerks.Apply(helper, harmony);
         StarterSeeds.Apply(harmony);
