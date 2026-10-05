@@ -97,6 +97,14 @@ internal static class Server
         if (status == "running" && e.IsMultipleOf(300) && Context.IsWorldReady)
             EnsureFreeCabin();
 
+        // Night events (earthquake, meteor, UFO...) end with a message box nobody is here to click,
+        // which freezes the night forever. Close it the way a player would.
+        if (Game1.farmEvent != null && e.IsMultipleOf(60) && Game1.activeClickableMenu is DialogueBox nightBox)
+        {
+            Log.Info("Closed the overnight event message so the night can finish.");
+            nightBox.closeDialogue();
+        }
+
         if (stage == 0 && Game1.activeClickableMenu is TitleMenu && Game1.gameMode == 0 && !SaveGame.IsProcessing)
         {
             if (++waitTicks < 30)
