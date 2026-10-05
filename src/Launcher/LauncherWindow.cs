@@ -10,16 +10,19 @@ namespace StembridgeValley.Launcher;
 /// </summary>
 internal sealed class LauncherWindow : Form, IUi
 {
-    private static readonly Color Cream = Color.FromArgb(255, 248, 231);
-    private static readonly Color Leaf = Color.FromArgb(76, 140, 58);
-    private static readonly Color LeafDark = Color.FromArgb(52, 104, 40);
-    private static readonly Color Wood = Color.FromArgb(120, 78, 44);
-    private static readonly Color Ink = Color.FromArgb(58, 44, 30);
-    private static readonly Color Soft = Color.FromArgb(128, 108, 86);
-    private static readonly Color Berry = Color.FromArgb(176, 64, 52);
+    // "Starlit Hollow" palette (owner-approved).
+    private static readonly Color Night = Color.FromArgb(0x19, 0x17, 0x28);    // window background
+    private static readonly Color Dusk = Color.FromArgb(0x28, 0x22, 0x3E);     // header band, main button text
+    private static readonly Color Field = Color.FromArgb(0x22, 0x1F, 0x36);    // text box / progress track
+    private static readonly Color Ivory = Color.FromArgb(0xF4, 0xEC, 0xDD);    // main text
+    private static readonly Color Lilac = Color.FromArgb(0xB9, 0xAE, 0xCB);    // muted text, borders
+    private static readonly Color Lavender = Color.FromArgb(0xB8, 0xA0, 0xDE); // main button
+    private static readonly Color LavenderHi = Color.FromArgb(0xCB, 0xB8, 0xEA);
+    private static readonly Color Gold = Color.FromArgb(0xE4, 0xBE, 0x66);     // accent
+    private static readonly Color Rose = Color.FromArgb(0xF2, 0xA7, 0xA0);     // problem hints
 
     private readonly Label title = new(), detail = new(), hint = new();
-    private readonly ProgressBar bar = new();
+    private readonly ProgressStrip bar = new();
     private readonly TextBox box = new();
     private readonly Button primary = new(), secondary = new(), browse = new();
     private readonly FlowLayoutPanel buttons = new();
@@ -35,29 +38,34 @@ internal sealed class LauncherWindow : Form, IUi
         ClientSize = new Size(560, 380);
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
-        BackColor = Cream;
+        BackColor = Night;
+        ForeColor = Ivory;
         Font = new Font("Segoe UI", 10.5f);
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
-        try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
+        try { Icon = Brand.AppIcon(); } catch { }
 
         var header = new HeaderPanel { Dock = DockStyle.Top, Height = 104 };
         Controls.Add(header);
 
         title.SetBounds(36, 128, 488, 34);
         title.Font = new Font("Segoe UI Semibold", 15f);
-        title.ForeColor = Ink;
+        title.ForeColor = Ivory;
         title.AutoEllipsis = true;
 
         detail.SetBounds(36, 166, 488, 64);
-        detail.ForeColor = Soft;
+        detail.ForeColor = Lilac;
 
-        bar.SetBounds(36, 238, 488, 14);
-        bar.Style = ProgressBarStyle.Continuous;
+        bar.SetBounds(36, 240, 488, 10);
+        bar.Track = Field;
+        bar.Fill = Lavender;
         bar.Visible = false;
 
         box.SetBounds(36, 236, 488, 30);
         box.Font = new Font("Consolas", 11f);
+        box.BackColor = Field;
+        box.ForeColor = Ivory;
+        box.BorderStyle = BorderStyle.FixedSingle;
         box.Visible = false;
         box.KeyDown += (_, e) =>
         {
@@ -65,7 +73,7 @@ internal sealed class LauncherWindow : Form, IUi
         };
 
         hint.SetBounds(36, 270, 488, 22);
-        hint.ForeColor = Berry;
+        hint.ForeColor = Rose;
         hint.Font = new Font("Segoe UI", 9.5f);
 
         buttons.SetBounds(36, 306, 488, 48);
@@ -103,6 +111,30 @@ internal sealed class LauncherWindow : Form, IUi
 
     protected override bool ShowWithoutActivation => autopilot != null;
 
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        // Dark title bar in the header's dusk purple (Windows 11; older Windows just keeps its own).
+        try
+        {
+            int on = 1;
+            DwmSetWindowAttribute(Handle, 20, ref on, sizeof(int));                // dark mode caption buttons
+            int caption = Dusk.R | Dusk.G << 8 | Dusk.B << 16;
+            DwmSetWindowAttribute(Handle, 35, ref caption, sizeof(int));           // caption color
+            int text = Lilac.R | Lilac.G << 8 | Lilac.B << 16;
+            DwmSetWindowAttribute(Handle, 36, ref text, sizeof(int));              // caption text color
+            int border = Dusk.R | Dusk.G << 8 | Dusk.B << 16;
+            DwmSetWindowAttribute(Handle, 34, ref border, sizeof(int));            // window border color
+        }
+        catch { }
+    }
+
     // ---------- IUi ----------
 
     public void Status(string text, string? more = null) => Ui(() =>
@@ -120,8 +152,7 @@ internal sealed class LauncherWindow : Form, IUi
         bar.Visible = percent != null && !box.Visible;
         if (percent is int p)
         {
-            bar.Style = p < 0 ? ProgressBarStyle.Marquee : ProgressBarStyle.Continuous;
-            if (p >= 0) bar.Value = Math.Clamp(p, 0, 100);
+            bar.Percent = p < 0 ? null : Math.Clamp(p, 0, 100);
         }
     });
 
@@ -269,10 +300,11 @@ internal sealed class LauncherWindow : Form, IUi
     private static void Colors(Button b, bool main)
     {
         b.FlatAppearance.BorderSize = main ? 0 : 1;
-        b.FlatAppearance.BorderColor = Color.FromArgb(200, 180, 150);
-        b.BackColor = main ? Leaf : Color.White;
-        b.ForeColor = main ? Color.White : Ink;
-        b.FlatAppearance.MouseOverBackColor = main ? LeafDark : Color.FromArgb(250, 240, 220);
+        b.FlatAppearance.BorderColor = Lilac;
+        b.BackColor = main ? Lavender : Night;
+        b.ForeColor = main ? Dusk : Ivory;
+        b.FlatAppearance.MouseOverBackColor = main ? LavenderHi : Field;
+        b.FlatAppearance.MouseDownBackColor = main ? Lilac : Dusk;
     }
 
     private void Ui(Action a)
@@ -288,7 +320,14 @@ internal sealed class LauncherWindow : Form, IUi
         {
             Directory.CreateDirectory(shotsDir);
             using var bmp = new Bitmap(Width, Height);
-            DrawToBitmap(bmp, new Rectangle(0, 0, Width, Height));
+            // The window's own composed frame (title bar included), not a desktop capture.
+            using (var g = Graphics.FromImage(bmp))
+            {
+                IntPtr hdc = g.GetHdc();
+                bool ok = PrintWindow(Handle, hdc, 2 /* PW_RENDERFULLCONTENT */);
+                g.ReleaseHdc(hdc);
+                if (!ok) DrawToBitmap(bmp, new Rectangle(0, 0, Width, Height));
+            }
             bmp.Save(Path.Combine(shotsDir, $"{++shot:00}-{Slug(title.Text)}.png"));
         }
         catch { }
@@ -296,44 +335,146 @@ internal sealed class LauncherWindow : Form, IUi
 
     private static string Slug(string s) => new string(s.ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
 
-    /// <summary>Green header with the name and a little row of hand-drawn sprouts.</summary>
+    /// <summary>Dusk-purple header: the leaf-arch logo, the name, and a few small stars.</summary>
     private sealed class HeaderPanel : Panel
     {
+        private readonly Image? mark = Brand.Mark();
+
         public HeaderPanel() { DoubleBuffered = true; }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            using (var sky = new LinearGradientBrush(ClientRectangle, Color.FromArgb(96, 166, 72), Leaf, LinearGradientMode.Vertical))
-                g.FillRectangle(sky, ClientRectangle);
-            // hills
-            using (var hill = new SolidBrush(Color.FromArgb(60, 255, 255, 255)))
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            float k = DeviceDpi / 96f;
+            g.Clear(Dusk);
+
+            // a few quiet stars on the right
+            (float x, float y, float s, bool gold)[] stars =
             {
-                g.FillEllipse(hill, -60, 62, 260, 120);
-                g.FillEllipse(hill, 330, 70, 300, 120);
-            }
-            // a wooden strip along the bottom
-            using (var wood = new SolidBrush(Wood))
-                g.FillRectangle(wood, 0, Height - 8, Width, 8);
-            // sprouts
-            for (int i = 0; i < 6; i++)
-                Sprout(g, Width - 200 + i * 30, Height - 14, i % 2 == 0 ? 1f : 0.8f);
+                (0.70f, 0.22f, 3.0f, true), (0.78f, 0.55f, 1.6f, false), (0.85f, 0.18f, 1.8f, false),
+                (0.90f, 0.48f, 3.6f, true), (0.95f, 0.26f, 1.4f, false), (0.64f, 0.62f, 1.4f, false),
+            };
+            foreach (var st in stars)
+                Star(g, Width * st.x, Height * st.y, st.s * k, st.gold ? Gold : Color.FromArgb(170, Lilac));
 
-            using var big = new Font("Segoe UI Semibold", 24f);
+            // gold rule along the bottom
+            using (var rule = new SolidBrush(Gold))
+                g.FillRectangle(rule, 0, Height - 3 * k, Width, 3 * k);
+
+            float logo = 72 * k;
+            if (mark != null)
+                g.DrawImage(mark, 22 * k, (Height - 3 * k - logo) / 2, logo, logo);
+
+            using var big = new Font("Segoe UI Semibold", 22f);
             using var small = new Font("Segoe UI", 12f);
-            g.DrawString("Junimo Hollow", big, Brushes.White, 30, 14 * DeviceDpi / 96f);
-            using var soft = new SolidBrush(Color.FromArgb(230, 255, 255, 255));
-            g.DrawString("A shared Stardew Valley world", small, soft, 33, 60 * DeviceDpi / 96f);
+            using var ivory = new SolidBrush(Ivory);
+            using var lilac = new SolidBrush(Lilac);
+            g.DrawString("Junimo Hollow", big, ivory, 104 * k, 18 * k);
+            g.DrawString("A shared Stardew Valley world", small, lilac, 107 * k, 56 * k);
         }
 
-        private static void Sprout(Graphics g, float x, float y, float s)
+        /// <summary>Four-point sparkle like the one inside the logo.</summary>
+        private static void Star(Graphics g, float cx, float cy, float r, Color c)
         {
-            using var stem = new Pen(Color.FromArgb(230, 255, 250, 210), 2.5f * s);
-            using var leaf = new SolidBrush(Color.FromArgb(235, 255, 250, 210));
-            g.DrawLine(stem, x, y, x, y - 16 * s);
-            g.FillEllipse(leaf, x - 11 * s, y - 22 * s, 11 * s, 7 * s);
-            g.FillEllipse(leaf, x, y - 26 * s, 11 * s, 7 * s);
+            float w = r * 0.32f;
+            var pts = new[]
+            {
+                new PointF(cx, cy - r * 2), new PointF(cx + w, cy - w), new PointF(cx + r * 2, cy), new PointF(cx + w, cy + w),
+                new PointF(cx, cy + r * 2), new PointF(cx - w, cy + w), new PointF(cx - r * 2, cy), new PointF(cx - w, cy - w),
+            };
+            using var b = new SolidBrush(c);
+            g.FillPolygon(b, pts);
         }
+    }
+
+    /// <summary>Flat progress bar in the palette (the Windows one ignores colors). Null percent = busy shimmer.</summary>
+    private sealed class ProgressStrip : Control
+    {
+        private readonly System.Windows.Forms.Timer tick = new() { Interval = 30 };
+        private int? percent = 0;
+        private float phase;
+        public Color Track { get; set; } = Color.DimGray;
+        public Color Fill { get; set; } = Color.White;
+
+        public ProgressStrip()
+        {
+            DoubleBuffered = true;
+            SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint, true);
+            tick.Tick += (_, _) => { phase = (phase + 0.012f) % 1.4f; Invalidate(); };
+        }
+
+        public int? Percent
+        {
+            get => percent;
+            set { percent = value; tick.Enabled = value == null && Visible; Invalidate(); }
+        }
+
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            tick.Enabled = percent == null && Visible;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.Clear(Parent?.BackColor ?? Night);
+            float r = Height / 2f;
+            using (var track = new SolidBrush(Track))
+                Pill(g, track, 0, 0, Width, Height, r);
+            using var fill = new SolidBrush(Fill);
+            if (percent is int p)
+            {
+                if (p > 0) Pill(g, fill, 0, 0, Math.Max(Height, Width * p / 100f), Height, r);
+            }
+            else
+            {
+                float seg = Width * 0.3f;
+                float x = (phase - 0.3f) * Width;
+                var clip = g.Clip;
+                g.SetClip(new RectangleF(0, 0, Width, Height));
+                Pill(g, fill, x, 0, seg, Height, r);
+                g.Clip = clip;
+            }
+        }
+
+        private static void Pill(Graphics g, Brush b, float x, float y, float w, float h, float r)
+        {
+            using var path = new GraphicsPath();
+            path.AddArc(x, y, 2 * r, 2 * r, 90, 180);
+            path.AddArc(x + w - 2 * r, y, 2 * r, 2 * r, 270, 180);
+            path.CloseFigure();
+            g.FillPath(b, path);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) tick.Dispose();
+            base.Dispose(disposing);
+        }
+    }
+}
+
+/// <summary>Logo and icon, embedded in the exe.</summary>
+internal static class Brand
+{
+    private static Stream? Res(string name) =>
+        typeof(Brand).Assembly.GetManifestResourceStream("JunimoHollow." + name);
+
+    public static Image? Mark()
+    {
+        using var s = Res("logo-mark.png");
+        if (s == null) return null;
+        using var img = Image.FromStream(s);
+        return new Bitmap(img); // detach from the stream
+    }
+
+    public static Icon? AppIcon()
+    {
+        using var s = Res("app.ico");
+        return s == null ? null : new Icon(s);
     }
 }

@@ -16,8 +16,11 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <InvariantGlobalization>true</InvariantGlobalization>
     <DebugType>none</DebugType>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../Shared/*.cs" />
+    <EmbeddedResource Include="Assets\logo-mark.png" LogicalName="JunimoHollow.logo-mark.png" />
+    <EmbeddedResource Include="Assets\app.ico" LogicalName="JunimoHollow.app.ico" />
   </ItemGroup>
 </Project>
