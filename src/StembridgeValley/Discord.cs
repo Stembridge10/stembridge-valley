@@ -23,6 +23,9 @@ internal static class Discord
     public const string CodePrefix = "d-";
     public const string KeyPrefix = "discord-";
     public const string DenyMods = "SV_MODS|";
+    /// <summary>Second character: the launcher adds "~2" to the code, and the character's key gets "-2".</summary>
+    public const string SlotSuffix = "~2", SlotKeySuffix = "-2";
+    public const int MaxSlots = 2;
 
     private sealed class Player
     {
@@ -77,13 +80,13 @@ internal static class Discord
         friendFarm = null;
         Reload();
         // d-DISCORDID-TOKEN: the ID tells the player's game which character is theirs; the token proves it.
-        if (!TrySplit(sent, out string id, out string token)
+        if (!TrySplit(sent, out string id, out string token, out int slot)
             || !roster.Tokens.TryGetValue(token, out Player? p) || p.Id != id || roster.Revoked.Contains(p.Id))
             return false;
-        key = KeyPrefix + p.Id;
+        key = KeyFor(p.Id, slot);
         name = p.Name;
-        // "friend" = the member who invited them (/invite): a new player is placed on that member's farm.
-        if (p.Friend != null && Farms.Enabled)
+        // "friend" = the member who invited them (/invite): their first character is placed on that member's farm.
+        if (p.Friend != null && Farms.Enabled && slot == 1)
             friendFarm = FarmRoster.FarmOfKey(KeyPrefix + p.Friend);
         return true;
     }
@@ -92,16 +95,37 @@ internal static class Discord
     public static string? NameOf(string key)
     {
         Reload();
-        string id = key.StartsWith(KeyPrefix) ? key[KeyPrefix.Length..] : key;
+        string id = AccountOf(key);
         return roster.Tokens.Values.FirstOrDefault(p => p.Id == id)?.Name;
     }
 
-    public static bool TrySplit(string code, out string id, out string token)
+    /// <summary>Player key of a Discord account's character: discord-ID (first) or discord-ID-2 (second).</summary>
+    public static string KeyFor(string id, int slot) => KeyPrefix + id + (slot == 2 ? SlotKeySuffix : "");
+
+    /// <summary>The Discord ID behind a player key (either character).</summary>
+    public static string AccountOf(string key)
+    {
+        string id = key.StartsWith(KeyPrefix) ? key[KeyPrefix.Length..] : key;
+        return id.EndsWith(SlotKeySuffix) ? id[..^SlotKeySuffix.Length] : id;
+    }
+
+    public static int SlotOf(string key) => key.StartsWith(KeyPrefix) && key.EndsWith(SlotKeySuffix) ? 2 : 1;
+
+    public static bool TrySplit(string code, out string id, out string token) => TrySplit(code, out id, out token, out _);
+
+    public static bool TrySplit(string code, out string id, out string token, out int slot)
     {
         id = token = "";
+        slot = 1;
         if (!code.StartsWith(CodePrefix, StringComparison.Ordinal))
             return false;
-        string[] parts = code.Trim().Split('-', 3);
+        code = code.Trim();
+        if (code.EndsWith(SlotSuffix, StringComparison.Ordinal))
+        {
+            slot = 2;
+            code = code[..^SlotSuffix.Length];
+        }
+        string[] parts = code.Split('-', 3);
         if (parts.Length != 3 || parts[1].Length == 0 || !parts[1].All(char.IsDigit) || parts[2].Length < 8)
             return false;
         id = parts[1];
@@ -120,7 +144,7 @@ internal static class Discord
         foreach (Farmer f in Game1.otherFarmers.Values.ToList())
         {
             string uid = f.userID.Value ?? "";
-            if (uid.StartsWith(KeyPrefix) && roster.Revoked.Contains(uid[KeyPrefix.Length..]))
+            if (uid.StartsWith(KeyPrefix) && roster.Revoked.Contains(AccountOf(uid)))
             {
                 Log.Warn($"Kicking {f.Name}: no longer allowed on the Discord server.");
                 Game1.server?.kick(f.UniqueMultiplayerID);

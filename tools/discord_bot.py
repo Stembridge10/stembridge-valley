@@ -84,6 +84,7 @@ def farm_of(uid, status=None):
 
 def name_of(data, key):
     uid = key.removeprefix("discord-")
+    uid = uid.removesuffix("-2")  # a member's second character
     for p in data["tokens"].values():
         if p["id"] == uid:
             return p["name"]
@@ -124,6 +125,7 @@ HOW_TO = (
     "   If Windows shows a blue \"Windows protected your PC\" box, click **More info**, then **Run anyway**. You only see it once.\n"
     "You just need Stardew Valley on PC.\n"
     "In game: press **P** for your farm's projects and **L** for your collection log.\n"
+    "The launcher's **My farm** button lets you rename your farm, invite friends, switch to a second character, or reset your farm.\n"
     "Keep your code to yourself: it's your character's key."
 )
 

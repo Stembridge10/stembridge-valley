@@ -61,7 +61,7 @@ internal static class FarmSettings
         }
     }
 
-    private static void SaveKept()
+    internal static void SaveKept()
     {
         try
         {

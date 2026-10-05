@@ -24,6 +24,8 @@ namespace StembridgeValley;
 ///   visitors{"open":bool}   -> owner opens or closes it to visitors
 ///   invite                  -> any member makes a 6-letter code for a friend (one per farm, 7 days)
 ///   join    {"invite"}      -> a player who hasn't made a farmer yet joins that friend's farm
+///   reset   {"confirm"}     -> owner resets the farm (FarmReset); "confirm" must be the farm's name as shown
+/// A code ending in "~2" is the same Discord account's second character (Discord.SlotSuffix).
 /// Requests are read off the network thread into a queue and handled on the game thread; each address gets at
 /// most 30 a minute.
 /// </summary>
@@ -200,7 +202,37 @@ internal static class Control
                 return Ok($"You'll start on {Farms.DisplayName(found.farm)}. Press Play and make your farmer.");
             }
         }
+        if (op == "reset")
+        {
+            if (farm == null || !started)
+                return Fail("Make your farmer first.");
+            string confirm = (q["confirm"]?.GetValue<string>() ?? "").Trim();
+            if (!string.Equals(confirm, Farms.DisplayName(farm), StringComparison.OrdinalIgnoreCase))
+                return Fail($"Type the farm's name exactly ({Farms.DisplayName(farm)}) to reset it.");
+            string shown = Farms.DisplayName(farm);
+            string? why = FarmReset.Run(key, farm);
+            return why != null ? Fail(why) : Ok($"{shown} was reset. Press Play to make your new farmer.");
+        }
         return Fail("The launcher asked for something this server doesn't know. Update the launcher.");
+    }
+
+    /// <summary>Farm reset: the farm's invite codes stop working.</summary>
+    public static void ForgetInvites(string farm)
+    {
+        var all = ReadInvites();
+        if (all.Where(kv => kv.Value.farm == farm).Select(kv => kv.Key).ToList() is { Count: > 0 } gone)
+        {
+            foreach (string g in gone)
+                all.Remove(g);
+            WriteJson(InvitesPath, all);
+        }
+        var joins = ReadJoins();
+        if (joins.Where(kv => kv.Value == farm).Select(kv => kv.Key).ToList() is { Count: > 0 } waiting)
+        {
+            foreach (string w in waiting)
+                joins.Remove(w);
+            WriteJson(JoinsPath, joins);
+        }
     }
 
     private static JsonObject Info(string key, string discordName, string? farm, bool started)
@@ -208,6 +240,10 @@ internal static class Control
         var r = Ok();
         r["name"] = CharacterName(key) ?? discordName;
         r["started"] = started;
+        r["slot"] = Discord.SlotOf(key);
+        string other = Discord.KeyFor(Discord.AccountOf(key), Discord.SlotOf(key) == 2 ? 1 : 2);
+        if (CharacterName(other) is { } otherName)
+            r["otherName"] = otherName;
         if (ReadJoins().TryGetValue(key, out string? joining) && !started)
             r["joining"] = Farms.DisplayName(joining);
         if (farm == null)
@@ -230,6 +266,12 @@ internal static class Control
             ["size"] = Farms.PlayersPerFarm,
             ["members"] = list,
         };
+        if (members.FirstOrDefault() == key && started)
+        {
+            f["resetProblem"] = FarmReset.Problem(key, farm);
+            if (FarmReset.NextAllowed(key) is { } next)
+                f["resetAfter"] = next.ToUnixTimeSeconds();
+        }
         var inv = ReadInvites().FirstOrDefault(kv => kv.Value.farm == farm && kv.Value.expires > DateTimeOffset.UtcNow.ToUnixTimeSeconds());
         if (inv.Key != null && started)
         {

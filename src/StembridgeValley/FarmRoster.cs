@@ -210,6 +210,22 @@ internal static class FarmRoster
 
     private static string Short(string key) => key.Length <= 14 ? key : key[..14];
 
+    /// <summary>Farm reset: a member leaves their farm, onto another farm (or onto none, to be placed again next join).</summary>
+    public static void MoveMember(string key, string from, string? to)
+    {
+        if (members.TryGetValue(from, out var list))
+            list.Remove(key);
+        if (to != null)
+        {
+            if (!members.TryGetValue(to, out var dest))
+                members[to] = dest = new List<string>();
+            if (!dest.Contains(key))
+                dest.Add(key);
+        }
+        SaveMembers();
+        Log.Info($"Player {Short(key)} moves from {Farms.DisplayName(from)} to {(to == null ? "no farm yet" : Farms.DisplayName(to))} (farm reset).");
+    }
+
     // ---------- cabins ----------
 
     /// <summary>One cabin per member (at least one), side by side, up to four.</summary>
@@ -295,5 +311,5 @@ internal static class FarmRoster
     }
 
     /// <summary>Nothing in it but the unopened starter gift box a new cabin comes with.</summary>
-    private static bool IsBare(Cabin c) => c.objects.Values.All(o => o is StardewValley.Objects.Chest ch && ch.giftboxIsStarterGift.Value);
+    internal static bool IsBare(Cabin c) => c.objects.Values.All(o => o is StardewValley.Objects.Chest ch && ch.giftboxIsStarterGift.Value);
 }

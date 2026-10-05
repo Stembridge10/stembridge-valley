@@ -13,6 +13,8 @@ internal sealed class LauncherSettings
     public string PlayerKey { get; set; } = "";
     public string GamePath { get; set; } = "";
     public string Feed { get; set; } = PackSync.DefaultFeed;
+    /// <summary>Which character to play: 1, or 2 for the second one (My farm switches it).</summary>
+    public int Character { get; set; } = 1;
 }
 
 /// <summary>
@@ -136,8 +138,15 @@ internal static class Program
             // 5. Play (first time round: the Ready screen, with My farm)
             if (attempt == 0 && !args.Contains("--no-ready"))
             {
-                var farm = FarmClient.CanUse(settings.Password) ? new FarmClient(settings.Address, settings.Password) : null;
-                if (!await ui.Ready(farm))
+                var farm = FarmClient.CanUse(settings.Password) ? new FarmClient(settings.Address, settings.Password) { Slot = settings.Character } : null;
+                bool play = await ui.Ready(farm);
+                if (farm != null && farm.Slot != settings.Character)
+                {
+                    settings.Character = farm.Slot;
+                    Save(settings);
+                    Say($"Switched to character {farm.Slot}.");
+                }
+                if (!play)
                 {
                     Say("Closed from the Ready screen.");
                     return 0;
@@ -204,6 +213,8 @@ internal static class Program
                 return false;
             if (TryParseInvite(invite, out string address, out string password))
             {
+                if (Account(password) != Account(settings.Password))
+                    settings.Character = 1; // a different person's code starts on their own 1st character
                 settings.Address = address;
                 settings.Password = password;
                 Save(settings);
@@ -288,7 +299,7 @@ internal static class Program
             start.ArgumentList.Add("--no-terminal");
         start.Environment["SV_ROLE"] = "client";
         start.Environment["SV_ADDRESS"] = settings.Address;
-        start.Environment["SV_PASSWORD"] = settings.Password;
+        start.Environment["SV_PASSWORD"] = settings.Character == 2 && FarmClient.CanUse(settings.Password) ? settings.Password + "~2" : settings.Password;
         start.Environment["SV_PLAYER_KEY"] = settings.PlayerKey;
         start.Environment["SV_PACK_VERSION"] = version;
         start.Environment["SV_STATE_DIR"] = StateDir;
@@ -297,6 +308,14 @@ internal static class Program
         ui.Playing();
         game.WaitForExit();
         return game.ExitCode;
+    }
+
+    /// <summary>The Discord account behind a personal code (d-ID-token), so a new token keeps the character choice.</summary>
+    private static string Account(string? code)
+    {
+        if (code == null || !FarmClient.CanUse(code)) return code ?? "";
+        string[] parts = code.Split('-', 3);
+        return parts.Length == 3 ? parts[1] : code;
     }
 
     /// <summary>Invite format: sv:host:port/password</summary>

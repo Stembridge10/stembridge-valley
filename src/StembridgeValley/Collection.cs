@@ -141,6 +141,13 @@ internal static class Collection
         Previous[key] = now;
     }
 
+    /// <summary>Farm reset: forget the old farmer's log, so the new one's first finds are announced.</summary>
+    public static void Forget(string key)
+    {
+        Previous.Remove(key);
+        completed?.Remove(key);
+    }
+
     private static JsonDocument BuildBoard()
     {
         var rows = Skills.Players().Select(who =>

@@ -200,6 +200,7 @@ internal sealed class LauncherWindow : Form, IUi
             title.Text = "Ready to play";
             detail.Text = farm != null
                 ? "Your mods are up to date. Press Play to join, or open My farm to rename it, invite a friend, or see who lives there."
+                  + (farm.Slot == 2 ? " (You're on your second character.)" : "")
                 : "Your mods are up to date. Press Play to join the server.";
             hint.Text = "";
             box.Visible = false;
@@ -216,6 +217,8 @@ internal sealed class LauncherWindow : Form, IUi
         if (farm == null) return;
         using var w = new FarmWindow(farm, shotsDir == null ? null : Path.Combine(shotsDir, "farm"), autopilot != null);
         w.ShowDialog(this);
+        if (readyShowing) detail.Text = "Your mods are up to date. Press Play to join, or open My farm to rename it, invite a friend, or see who lives there."
+            + (farm.Slot == 2 ? " (You're on your second character.)" : "");
         if (autopilot != null) primary.PerformClick();
     }
 

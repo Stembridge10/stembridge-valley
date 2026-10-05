@@ -31,6 +31,9 @@ internal sealed class ModEntry : Mod
             Monitor.Log("No server password set.", LogLevel.Warn);
 
         var harmony = new Harmony(ModManifest.UniqueID);
+        if (SV.Role == Role.Server)
+            FarmReset.UndoUnsaved(); // before anything reads the state files
+        FarmReset.Apply(helper);
         Rules.Apply(helper, harmony);
         Town.Apply(helper);
         Network.Apply(harmony);

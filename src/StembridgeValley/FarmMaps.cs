@@ -90,6 +90,13 @@ internal static class FarmMaps
         return "Maps\\" + (KindOf(map)?.Map ?? Farms.TestFarmMapName ?? "Farm");
     }
 
+    /// <summary>Farm reset: the farm waits for its owner to pick a map again.</summary>
+    public static void Forget(string farm)
+    {
+        if (chosen.Remove(farm))
+            Save();
+    }
+
     public static bool IsPending(GameLocation? farm) => farm != null && farm.modData.TryGetValue(PendingKey, out string? p) && p == "1";
 
     private static void Load()

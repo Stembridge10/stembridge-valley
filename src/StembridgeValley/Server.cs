@@ -260,6 +260,33 @@ internal static class Server
     private const int CabinW = 5, CabinH = 3;
 
     /// <summary>
+    /// Farm reset: move a whole cabin (its farmer and everything inside) onto another farm, in the row if there's room.
+    /// Empty never-used cabins there make way for it first.
+    /// </summary>
+    internal static bool MoveCabin(Building cabin, GameLocation from, GameLocation to)
+    {
+        foreach (Building spare in to.buildings.Where(b => b.isCabin && b.GetIndoors() is Cabin c
+                     && (!c.HasOwner || !c.owner.isCustomized.Value) && FarmRoster.IsBare(c)).ToList())
+            to.destroyStructure(spare);
+        IEnumerable<Vector2> spots = Enumerable.Range(0, Farms.PlayersPerFarm).Select(i => RowSpot(to, i)).Concat(CabinSpots(to));
+        foreach (Vector2 tile in spots)
+        {
+            if (!SpotIsClear(to, tile))
+                continue;
+            ClearSpot(to, tile);
+            from.buildings.Remove(cabin);
+            cabin.tileX.Value = (int)tile.X;
+            cabin.tileY.Value = (int)tile.Y;
+            to.buildings.Add(cabin);
+            cabin.updateInteriorWarps();
+            Log.Info($"Moved a cabin from {from.Name} to {to.Name} at {tile.X},{tile.Y}.");
+            return true;
+        }
+        Log.Warn($"No room on {to.Name} for a moved cabin.");
+        return false;
+    }
+
+    /// <summary>
     /// Footprint plus a one-tile margin (two in front of the door) must be farm ground with nothing anyone made on it.
     /// Wild debris (weeds, stones, twigs, wild trees, stumps, boulders, bushes) is fine: it gets cleared.
     /// Crops, fruit trees, chests, machines, paths and other buildings are never touched.

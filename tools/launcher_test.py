@@ -82,6 +82,23 @@ def main():
           and json.loads((mods / "StembridgeValley/manifest.json").read_text())["Version"] == "0.1.1")
     check("updates explained in plain words", "newer mods" in out, out.strip().splitlines()[-3:].__str__())
 
+    # A player's selected second character uses the same private code with the server's ~2 suffix.
+    for p in game.glob("run-*.txt"):
+        p.unlink()
+    char_root = LAB / "player-character-2"
+    char_root.mkdir()
+    personal = "d-123456789012345678-abcdefghijk"
+    (char_root / "launcher.json").write_text(json.dumps({"GamePath": w(game), "Feed": w(feed / "pack.json"),
+                                                         "Address": "127.0.0.1:24642", "Password": personal,
+                                                         "Character": 2}))
+    r_char = run_launcher(char_root, "--no-ready")
+    char_runs = sorted(game.glob("run-*.txt"))
+    char_password = ""
+    if char_runs:
+        char_password = dict(l.split("=", 1) for l in char_runs[-1].read_text().splitlines()).get("SV_PASSWORD", "")
+    check("selected second character is passed to the game", r_char.returncode == 0 and char_password == personal + "~2",
+          char_password)
+
     # Tampered download: change the zip but not pack.json.
     shutil.copy2(LAB / "v0.1.1/pack.json", feed / "pack.json")
     with open(LAB / "v0.1.1/mods.zip", "ab") as f:

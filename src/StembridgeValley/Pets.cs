@@ -119,6 +119,13 @@ internal static class Pets
         Helper.Multiplayer.SendMessage(all, ListMessage, new[] { ModId }, new[] { who.UniqueMultiplayerID });
     }
 
+    /// <summary>Farm reset: the owner's old farmer is gone, and its pets with it.</summary>
+    public static void Forget(string key)
+    {
+        if (ServerPets.Remove(key))
+            Save();
+    }
+
     private static string PathName => Path.Combine(SV.StateDir, "pets.json");
     private static void Load()
     {

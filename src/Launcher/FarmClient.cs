@@ -16,7 +16,12 @@ internal sealed class FarmClient
 {
     private readonly string host;
     private readonly int port;
-    private readonly string code;
+    private readonly string baseCode;
+    /// <summary>Which of the player's two characters (1 or 2); the second sends the code with "~2" on the end.</summary>
+    public int Slot { get; set; } = 1;
+    private string code => Slot == 2 ? baseCode + "~2" : baseCode;
+    /// <summary>host:port this client talks to.</summary>
+    public string Address => $"{host}:{port}";
     private long nextId = Random.Shared.NextInt64(1, long.MaxValue / 2);
 
     public FarmClient(string address, string code)
@@ -24,7 +29,7 @@ internal sealed class FarmClient
         int colon = address.LastIndexOf(':');
         host = colon > 0 ? address[..colon] : address;
         port = colon > 0 && int.TryParse(address[(colon + 1)..], out int p) ? p : 24642;
-        this.code = code;
+        baseCode = code;
     }
 
     /// <summary>Only personal Discord codes (d-...) can use the farm panel.</summary>

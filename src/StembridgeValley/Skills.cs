@@ -206,6 +206,19 @@ internal static class Skills
     public static IEnumerable<Farmer> Players() =>
         Game1.getAllFarmers().Where(f => !f.IsMainPlayer && f.isCustomized.Value && !string.IsNullOrEmpty(f.userID.Value));
 
+    /// <summary>Farm reset: forget the old farmer's levels, so the new one's milestones are announced.</summary>
+    public static void Forget(string key)
+    {
+        if (seen == null || !seen.Remove(key))
+            return;
+        try
+        {
+            File.WriteAllText(SeenPath + ".tmp", JsonSerializer.Serialize(seen));
+            File.Move(SeenPath + ".tmp", SeenPath, true);
+        }
+        catch (Exception ex) { Log.Warn($"Couldn't write skill-levels.json: {ex.Message}"); }
+    }
+
     private static void Scan()
     {
         bool first = seen == null;
