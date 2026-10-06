@@ -5,8 +5,20 @@ namespace StembridgeValley;
 /// <summary>World rules. The server's copy decides world rules (clock, crops); each player's copy decides personal rules (energy, naps).</summary>
 public sealed class ModConfig
 {
-    /// <summary>Real minutes for one in-game day (6am to 2am). Vanilla is about 14.</summary>
-    public int RealMinutesPerDay { get; set; } = 60;
+    /// <summary>Real minutes for one in-game day (6am to 6am with the 24-hour day, else 6am to 2am). Vanilla is about 14.</summary>
+    public int RealMinutesPerDay { get; set; } = 15;
+
+    /// <summary>The 24-hour day: the clock runs to 6am, the new day starts there, and nobody is sent home.</summary>
+    public bool FullDayClock { get; set; } = true;
+
+    /// <summary>Skull Cavern dive timer, in real minutes (0 turns it off).</summary>
+    public int DiveMinutes { get; set; } = 8;
+
+    /// <summary>Real seconds added to a dive by eating food or a drink that gives a buff.</summary>
+    public int DiveBuffSeconds { get; set; } = 60;
+
+    /// <summary>Most a single dive can be stretched by eating, in real minutes.</summary>
+    public int DiveMaxBonusMinutes { get; set; } = 5;
 
     /// <summary>Keep the clock running while nobody is online.</summary>
     public bool ClockRunsWhenEmpty { get; set; } = true;
@@ -26,7 +38,7 @@ public sealed class ModConfig
     /// <summary>Coming back after this many real minutes away refills energy.</summary>
     public int RestedAfterMinutesAway { get; set; } = 20;
 
-    /// <summary>The 2am pass-out costs no money and sends no letter.</summary>
+    /// <summary>The end-of-day pass-out costs no money and sends no letter.</summary>
     public bool NoPassOutPenalty { get; set; } = true;
 
     /// <summary>Crops already planted keep growing when the season changes instead of dying.</summary>

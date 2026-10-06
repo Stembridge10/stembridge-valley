@@ -34,7 +34,9 @@ internal sealed class ModEntry : Mod
         if (SV.Role == Role.Server)
             FarmReset.UndoUnsaved(); // before anything reads the state files
         FarmReset.Apply(helper);
+        Clock.Apply(helper, harmony); // before Rules: the day length depends on it
         Rules.Apply(helper, harmony);
+        Dive.Apply(helper, harmony);
         Town.Apply(helper);
         Network.Apply(harmony);
         Farms.Apply(helper, harmony);

@@ -136,7 +136,7 @@ internal static class FarmReset
             return "Only the farm's owner can reset it.";
         if (NextAllowed(ownerKey) is { } next)
             return $"You can reset again {When(next)}. (Once a week.)";
-        if (Game1.activeClickableMenu is SaveGameMenu || Game1.farmEvent != null || Game1.timeOfDay >= 2500)
+        if (Game1.activeClickableMenu is SaveGameMenu || Game1.farmEvent != null || Game1.timeOfDay >= Clock.End - 100)
             return "The server is ending the day. Try again in a minute.";
         var online = Game1.getOnlineFarmers().Where(f => !f.IsMainPlayer).ToList();
         if (online.FirstOrDefault(f => FarmRoster.Members(farm).Contains(f.userID.Value)) is { } here)

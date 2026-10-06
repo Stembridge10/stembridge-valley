@@ -20,7 +20,8 @@ Windows may warn that the launcher is from an unknown publisher (it isn't code-s
 - Your energy carries over between days; it doesn't refill at 6am.
 - Get energy back by resting: sitting on chairs or benches is fast, standing still is slow, and using a bed is a nap that fully refills you without ending the day.
 - If you were away for 20 minutes or more, you come back fully rested.
-- No 2am pass-out: no lost money, you just keep going into the next day.
+- 24-hour days: the clock runs all night and the new day starts at 6am, right where you stand (a short save, then keep playing).
+- Skull Cavern dives are timed (8 minutes); food with a buff adds a minute, up to 5 extra.
 - Crops don't die when the season changes; they keep growing until harvest.
 - Friendships don't drop when you're offline.
 

@@ -23,8 +23,8 @@ internal static class Rules
         Helper = helper;
         var cfg = SV.Config;
 
-        // 1. Day length. 6am to 2am is 120 ten-minute ticks.
-        int msPerTen = Math.Max(1000, cfg.RealMinutesPerDay * 60_000 / 120);
+        // 1. Day length: 144 ten-minute ticks for the 24-hour day (6am to 6am), 120 for the game's 6am to 2am.
+        int msPerTen = Math.Max(1000, cfg.RealMinutesPerDay * 60_000 / Clock.TicksPerDay);
         Game1.realMilliSecondsPerGameTenMinutes = msPerTen;
         Game1.realMilliSecondsPerGameMinute = msPerTen / 10;
         Log.Info($"Day length: {cfg.RealMinutesPerDay} real minutes ({msPerTen / 1000.0:0.#}s per 10 game minutes).");
@@ -333,8 +333,8 @@ internal static class Rules
             }
         }
 
-        // 2am: shut menus so the pass-out (and the server's day change) is never held up by someone in a shop.
-        if (Game1.timeOfDay >= 2600 && Game1.activeClickableMenu != null
+        // End of the day: shut menus so the pass-out (and the server's day change) is never held up by someone in a shop.
+        if (Game1.timeOfDay >= Clock.End && Game1.activeClickableMenu != null
             && Game1.activeClickableMenu is not ReadyCheckDialog
             && Game1.activeClickableMenu is not SaveGameMenu
             && Game1.activeClickableMenu is not ShippingMenu

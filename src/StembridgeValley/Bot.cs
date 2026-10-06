@@ -60,6 +60,11 @@ internal static class Bot
             if (Game1.currentLocation?.Name != pendingHomeCheck) homeMisses++;
             pendingHomeCheck = null;
         }
+        if (Environment.GetEnvironmentVariable("SV_BOT_CLOCK") is { Length: > 0 } spot)
+        {
+            ClockCheck(spot, e.Ticks);
+            return;
+        }
         if (!Context.IsPlayerFree || Game1.player.controller != null || e.Ticks < nextActionTick)
             return;
         if (Environment.GetEnvironmentVariable("SV_BOT_DOOR_CHECK") == "1" && DoorCheck(e.Ticks))
@@ -821,6 +826,75 @@ internal static class Bot
     {
         Game1.Multiplayer.sendChatMessage(LocalizedContentManager.CurrentLanguageCode, Lines[rng.Next(Lines.Length)], Multiplayer.AllPlayers);
         chats++;
+    }
+
+    private static int clockStage, lastClockHour = -1, clockDay = -1, eatAt, cutsceneTicks;
+    private static bool keptAlive;
+
+    /// <summary>
+    /// Test of the 24-hour day and the dive timer (SV_BOT_CLOCK=Town|Mine|Skull): go to a spot and stand still,
+    /// report the clock every game hour, and report where we wake up after the 6am day change.
+    /// Skull: dive into the Skull Cavern and eat a buff food once, to see the timer extend and then pull us out.
+    /// </summary>
+    private static void ClockCheck(string spot, uint ticks)
+    {
+        Farmer p = Game1.player;
+        if (clockStage == 0 && Context.IsPlayerFree && Game1.locationRequest == null)
+        {
+            clockStage = 1;
+            clockDay = (int)Game1.stats.DaysPlayed;
+            p.eventsSeen.Add("100162"); // the mine's first-visit cutscene: a real player clicks through it, the bot can't
+            switch (spot)
+            {
+                case "Mine": Game1.enterMine(5); break;
+                case "Skull": Game1.enterMine(130); break;
+                default: Game1.warpFarmer("Town", 47, 70, 2); break;
+            }
+            Log.Info($"[clock] going to {spot}");
+            return;
+        }
+        if (clockStage == 0)
+            return;
+        if (spot is "Skull" or "Mine" && Game1.player.health < 30 && !keptAlive)
+        {
+            keptAlive = true; // log once that monsters reached it
+            Log.Info($"[clock] monsters got to the bot (health {Game1.player.health}); letting it happen once to test waking after a faint");
+        }
+        if (Game1.CurrentEvent is { skipped: false } cutscene && !Game1.isFestival())
+        {
+            // Click through like a player would: skip if allowed, otherwise advance the dialogue; end it after 15s.
+            cutsceneTicks++;
+            if (cutsceneTicks % 60 == 0)
+            {
+                if (cutscene.skippable) cutscene.skipEvent();
+                else if (Game1.activeClickableMenu is DialogueBox box) box.receiveLeftClick(0, 0);
+            }
+            if (cutsceneTicks == 900)
+            {
+                Log.Info($"[clock] ending cutscene {cutscene.id} in {Game1.currentLocation?.NameOrUniqueName}");
+                Game1.activeClickableMenu = null;
+                cutscene.endBehaviors();
+            }
+        }
+        else
+            cutsceneTicks = 0;
+        if (spot == "Skull" && clockStage == 1 && Dive.Diving && ++eatAt == 600 && Context.IsPlayerFree)
+        {
+            var food = ItemRegistry.Create<StardewValley.Object>("(O)903"); // Ginger Ale: a buff drink
+            p.eatObject(food, overrideFullness: true);
+            Log.Info("[clock] ate Ginger Ale in the cavern");
+        }
+        int hour = Game1.timeOfDay / 100;
+        if (hour != lastClockHour && Context.IsWorldReady && !Game1.newDay)
+        {
+            lastClockHour = hour;
+            Log.Info($"[clock] {Game1.timeOfDay} day {Game1.stats.DaysPlayed} at {Game1.currentLocation?.NameOrUniqueName} {p.TilePoint.X},{p.TilePoint.Y} home={p.homeLocation.Value}");
+        }
+        if (clockStage == 1 && Context.IsWorldReady && !Game1.newDay && Game1.stats.DaysPlayed > clockDay && Context.IsPlayerFree)
+        {
+            clockStage = 2;
+            Log.Info($"[clock] WOKE day {Game1.stats.DaysPlayed} {Game1.timeOfDay} at {Game1.currentLocation?.NameOrUniqueName} {p.TilePoint.X},{p.TilePoint.Y}");
+        }
     }
 
     private static void Report()

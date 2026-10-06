@@ -1,5 +1,9 @@
 {
-  "RealMinutesPerDay": 14,
+  "RealMinutesPerDay": 15,
+  "FullDayClock": true,
+  "DiveMinutes": 8,
+  "DiveBuffSeconds": 60,
+  "DiveMaxBonusMinutes": 5,
   "ClockRunsWhenEmpty": true,
   "KeepEnergyOvernight": true,
   "BedIsNap": true,
